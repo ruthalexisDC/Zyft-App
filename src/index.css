@@ -1,0 +1,230 @@
+@import "tailwindcss";
+
+/* Custom styles can be added here */
+body {
+    background-color: #0a0a0a;
+    color: #ffffff;
+    font-family: 'Montserrat', sans-serif;
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+
+
+/* ─── DARK MODE (default — untouched) ─── */
+:root {
+  --bg-base:        #0a0a0a;
+  --bg-card:        #13131f;
+  --bg-elevated:    #1a1a2e;
+  --bg-input:       #0a0a0a;
+  --border:         rgba(255, 255, 255, 0.05);
+  --border-strong:  rgba(255, 255, 255, 0.10);
+  --text-primary:   #ffffff;
+  --text-secondary: #d1d5db;
+  --text-muted:     #6b7280;
+  --purple:         #8b5cf6;
+  --purple-light:   #a78bfa;
+  --purple-bg:      rgba(139, 92, 246, 0.10);
+  --purple-border:  rgba(139, 92, 246, 0.20);
+  --shadow:         rgba(0, 0, 0, 0.50);
+}
+ 
+/* ─── LIGHT MODE ─── */
+:root.light {
+  --bg-base:        #f0f0f7;
+  --bg-card:        #ffffff;
+  --bg-elevated:    #eae8f5;
+  --bg-input:       #eae8f5;
+  --border:         rgba(124, 58, 237, 0.08);
+  --border-strong:  rgba(124, 58, 237, 0.16);
+  --text-primary:   #0f0f1a;
+  --text-secondary: #2d2450;
+  --text-muted:     #6b5fa0;
+  --purple:         #7c3aed;
+  --purple-light:   #8b5cf6;
+  --purple-bg:      rgba(124, 58, 237, 0.08);
+  --purple-border:  rgba(124, 58, 237, 0.18);
+  --shadow:         rgba(0, 0, 0, 0.08);
+}
+ 
+html {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+ 
+/* ════════════════════════════════════════
+   LIGHT MODE OVERRIDES
+════════════════════════════════════════ */
+ 
+/* ── Backgrounds ── */
+:root.light .bg-\[\#0a0a0a\]       { background-color: var(--bg-base) !important; }
+:root.light .bg-\[\#13131f\]       { background-color: var(--bg-card) !important; }
+:root.light .bg-\[\#1a1a2e\]       { background-color: var(--bg-elevated) !important; }
+:root.light .bg-\[\#0f0f1a\]       { background-color: var(--bg-elevated) !important; }
+:root.light .bg-\[\#0a0a0a\]\/95   { background-color: rgba(240,240,247,0.97) !important; }
+ 
+:root.light .bg-white\/5           { background-color: rgba(124,58,237,0.05) !important; }
+:root.light .bg-white\/10          { background-color: rgba(124,58,237,0.08) !important; }
+:root.light .bg-black\/40          { background-color: rgba(15,15,26,0.35) !important; }
+:root.light .bg-black\/60          { background-color: rgba(15,15,26,0.50) !important; }
+ 
+/* ── Hover states ── */
+:root.light .hover\:bg-white\/5:hover        { background-color: rgba(124,58,237,0.05) !important; }
+:root.light .hover\:bg-white\/10:hover       { background-color: rgba(124,58,237,0.08) !important; }
+:root.light .hover\:border-white\/10:hover   { border-color: var(--border-strong) !important; }
+:root.light .active\:scale-\[0\.98\]:active  { opacity: 0.9; }
+ 
+/* ── Borders ── */
+:root.light .border-white\/5       { border-color: var(--border) !important; }
+:root.light .border-white\/10      { border-color: var(--border-strong) !important; }
+ 
+/* ── Text — general ── */
+:root.light .text-white            { color: var(--text-primary) !important; }
+:root.light .text-gray-300         { color: var(--text-secondary) !important; }
+:root.light .text-gray-400         { color: var(--text-secondary) !important; }
+:root.light .text-gray-500         { color: var(--text-muted) !important; }
+:root.light .text-gray-600         { color: var(--text-muted) !important; }
+:root.light .text-gray-700         { color: var(--text-muted) !important; }
+ 
+/* ── Placeholder text ── */
+:root.light .placeholder-gray-600::placeholder { color: var(--text-muted) !important; }
+:root.light input::placeholder,
+:root.light textarea::placeholder  { color: var(--text-muted) !important; }
+ 
+/* ── Inputs, textareas, selects ── */
+:root.light input,
+:root.light textarea,
+:root.light select {
+  background-color: var(--bg-card) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-strong) !important;
+}
+:root.light input:focus,
+:root.light textarea:focus,
+:root.light select:focus {
+  border-color: var(--purple) !important;
+  outline: none !important;
+}
+ 
+/* ── Gradient clip text (Profile bio, BMI, etc.) ──
+   bg-clip-text + text-transparent renders as rainbow in light mode.
+   Override: make it solid purple instead. ── */
+:root.light .bg-clip-text          { -webkit-background-clip: unset !important; background-clip: unset !important; }
+:root.light .text-transparent      { color: var(--purple) !important; }
+ 
+/* ── Uppercase tracking labels (WORKOUTS, STREAK, PRs, THIS WEEK'S SPLIT) ── */
+:root.light .uppercase             { color: var(--text-muted) !important; }
+/* But don't override colored uppercase text (purple/orange/yellow buttons) */
+:root.light .text-purple-400.uppercase,
+:root.light .text-orange-400.uppercase,
+:root.light .text-yellow-400.uppercase,
+:root.light .text-green-400.uppercase,
+:root.light .text-blue-400.uppercase { color: inherit !important; }
+ 
+/* ── Very small muted labels (10px stat subtitles) ── */
+:root.light .text-\[10px\]         { color: var(--text-muted) !important; }
+/* Exception: colored small text should keep its color */
+:root.light .text-\[10px\].text-purple-400,
+:root.light .text-\[10px\].text-gray-500.mb-0\.5,
+:root.light .text-\[10px\].text-blue-400  { color: inherit !important; }
+ 
+/* ── Split week day labels (the — dashes and M T W letters) ── */
+:root.light .text-\[9px\]          { color: var(--text-muted) !important; }
+:root.light .text-\[8px\]          { color: var(--text-muted) !important; }
+ 
+/* ── "Today: Rest" and similar small center labels ── */
+:root.light .text-gray-500.mt-1\.5 { color: var(--text-muted) !important; }
+ 
+/* ── Shadows ── */
+:root.light .shadow-black\/50      { box-shadow: 0 10px 25px -5px var(--shadow) !important; }
+:root.light .shadow-black\/40      { box-shadow: 0 8px 20px -4px var(--shadow) !important; }
+:root.light .shadow-purple-500\/30 { box-shadow: 0 8px 20px -4px rgba(124,58,237,0.25) !important; }
+ 
+/* ── Backdrop overlays ── */
+:root.light .backdrop-blur-xl      { background-color: rgba(240,240,247,0.97) !important; }
+:root.light .backdrop-blur-sm      { background-color: rgba(15,15,26,0.45) !important; }
+ 
+/* ── Bottom nav border ── */
+:root.light nav .border-t          { border-top-color: var(--border) !important; }
+ 
+/* ── Nav inactive icons & labels ── */
+:root.light nav .text-gray-500     { color: #9488c0 !important; }
+ 
+/* ── Ring / outline ── */
+:root.light .ring-purple-400       { --tw-ring-color: rgba(124,58,237,0.4) !important; }
+ 
+/* ── "My Goals" card — bg-[#13131f] border border-white/5 ── */
+:root.light .border.border-white\/5 { border-color: var(--border) !important; }
+ 
+/* ── Achievement card ── */
+:root.light .bg-purple-500\/10     { background-color: rgba(124,58,237,0.08) !important; }
+:root.light .border-purple-500\/20 { border-color: rgba(124,58,237,0.16) !important; }
+:root.light .text-purple-300       { color: var(--purple) !important; }
+:root.light .text-purple-400       { color: var(--purple) !important; }
+:root.light .text-\[#a78bfa\]      { color: var(--purple) !important; }
+:root.light .text-\[#8b5cf6\]      { color: var(--purple) !important; }
+ 
+/* ── Stat mini-cards tints (This Week / Total Calories / Split Compliance) ── */
+:root.light .bg-\[\#8b5cf6\]\/10   { background-color: rgba(124,58,237,0.08) !important; }
+:root.light .border-\[\#8b5cf6\]\/20 { border-color: rgba(124,58,237,0.15) !important; }
+:root.light .border-\[\#8b5cf6\]\/30 { border-color: rgba(124,58,237,0.20) !important; }
+:root.light .bg-blue-500\/10       { background-color: rgba(59,130,246,0.08) !important; }
+:root.light .border-blue-500\/20   { border-color: rgba(59,130,246,0.15) !important; }
+:root.light .border-blue-500\/30   { border-color: rgba(59,130,246,0.20) !important; }
+:root.light .bg-yellow-500\/10     { background-color: rgba(234,179,8,0.08) !important; }
+:root.light .border-yellow-500\/20 { border-color: rgba(234,179,8,0.15) !important; }
+ 
+/* ── Today's Energy progress bar track ── */
+:root.light .bg-white\/10.rounded-full { background-color: rgba(124,58,237,0.10) !important; }
+ 
+/* ── Dividers ── */
+:root.light .border-t.border-white\/5  { border-top-color: var(--border) !important; }
+:root.light .border-b.border-white\/5  { border-bottom-color: var(--border) !important; }
+:root.light .border-gray-800       { border-color: var(--border-strong) !important; }
+ 
+/* ── Modal backgrounds ── */
+:root.light .bg-\[\#1a1a2e\].rounded-2xl { background-color: var(--bg-card) !important; }
+:root.light .bg-black\/60.backdrop-blur-sm {
+  background-color: rgba(15,15,26,0.50) !important;
+}
+ 
+/* ── Notification / Activity cards ── */
+:root.light .bg-\[\#13131f\].rounded-2xl { background-color: var(--bg-card) !important; }
+:root.light .bg-\[\#1a1a2e\].rounded-xl  { background-color: var(--bg-elevated) !important; }
+ 
+/* ── "View profile" / outlined buttons in activity ── */
+:root.light button.border.border-white\/10 {
+  border-color: var(--border-strong) !important;
+  color: var(--text-secondary) !important;
+}
+ 
+/* ── Loader spinner ── */
+:root.light .text-purple-400       { color: var(--purple) !important; }
+ 
+/* ── Range inputs ── */
+:root.light input[type="range"] {
+  background-color: rgba(124,58,237,0.12) !important;
+}
+ 
+/* ── Online status dot — border matches card bg in light mode ── */
+:root.light .border-\[\#13131f\] { border-color: var(--bg-card) !important; }
+
+:root.light .border-\[\#0a0a0a\] { border-color: var(--bg-base) !important; }
+
+/* ── "Log Workout" quick-action button sits on a static purple
+   gradient that does NOT change between light/dark mode. Its text
+   must stay white in both modes, so it's excluded from the blanket
+   `.text-white -> var(--text-primary)` override above. ── */
+:root.light .bg-gradient-to-br.from-\[\#8b5cf6\] .text-white {
+  color: #ffffff !important;
+}

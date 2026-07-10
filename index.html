@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin-allow-popups">
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ZYFT APP</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- Facebook SDK -->
+    <script>
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId: '985807270698186',
+      cookie: true,
+      xfbml: true,
+      version: 'v18.0'
+    });
+  };
+</script>
+    <script async defer crossorigin="anonymous" 
+      src="https://connect.facebook.net/en_US/sdk.js">
+    </script>
+    
+    
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
