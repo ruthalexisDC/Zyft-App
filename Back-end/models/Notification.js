@@ -147,9 +147,12 @@ const notificationSchema = new mongoose.Schema(
     title: String,
     subtitle: String,
     // For user-generated notifications
+    // NOTE: this references the Post document (posts carry an embedded
+    // `workout` subdocument, not a separate Workout collection — there is
+    // no standalone Workout document to point at here).
     workout: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Workout",
+      ref: "Post",
       default: null,
     },
     comment: {

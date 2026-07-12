@@ -5,6 +5,20 @@
 
 // const router = express.Router();
 
+// // ── GET /api/notifications/unread-count
+// // Lightweight count — used by the nav badge. Must be registered BEFORE /:id routes.
+// router.get("/unread-count", auth, async (req, res) => {
+//   try {
+//     const count = await Notification.countDocuments({
+//       recipient: req.user._id,
+//       read: false,
+//     });
+//     res.json({ count });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// });
+
 // // ── GET /api/notifications
 // // Returns the logged-in user's notifications, newest first.
 // router.get("/", auth, async (req, res) => {
@@ -15,13 +29,12 @@
 //       .populate("sender", "name handle avatar")
 //       .populate("workout", "title");
 
-//     // Shape into the format Activity.jsx expects
 //     const shaped = notifications.map((n) => {
 //       const base = {
-//         id:    n._id,
-//         type:  n.type,
-//         time:  timeAgo(n.createdAt),
-//         read:  n.read,
+//         id:   n._id,
+//         type: n.type,
+//         time: timeAgo(n.createdAt),
+//         read: n.read,
 //       };
 
 //       if (n.type === "streak" || n.type === "welcome") {
@@ -37,10 +50,10 @@
 //           initials: initials(n.sender.name),
 //           avatar:   n.sender.avatar,
 //         },
-//         content:    actionText(n.type),
-//         target:     n.workout?.title ?? null,
-//         workoutId:  n.workout?._id ?? null,
-//         commentId:  n.comment ?? null,
+//         content:   actionText(n.type),
+//         target:    n.workout?.title ?? null,
+//         workoutId: n.workout?._id ?? null,
+//         commentId: n.comment ?? null,
 //       };
 //     });
 
@@ -95,14 +108,19 @@
 
 // function timeAgo(date) {
 //   const diff = Math.floor((Date.now() - new Date(date)) / 1000);
-//   if (diff < 60)   return `${diff}s`;
-//   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+//   if (diff < 60)    return `${diff}s`;
+//   if (diff < 3600)  return `${Math.floor(diff / 60)}m`;
 //   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
 //   return `${Math.floor(diff / 86400)}d`;
 // }
 
 // function initials(name) {
-//   return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+//   return name
+//     .split(" ")
+//     .map((w) => w[0])
+//     .join("")
+//     .toUpperCase()
+//     .slice(0, 2);
 // }
 
 // function actionText(type) {
@@ -146,7 +164,9 @@ router.get("/", auth, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(50)
       .populate("sender", "name handle avatar")
-      .populate("workout", "title");
+      // `workout` references a Post document — its embedded workout title
+      // lives at `workout.title`, and post text lives at `content`.
+      .populate("workout", "workout.title content");
 
     const shaped = notifications.map((n) => {
       const base = {
@@ -170,9 +190,9 @@ router.get("/", auth, async (req, res) => {
           avatar:   n.sender.avatar,
         },
         content:   actionText(n.type),
-        target:    n.workout?.title ?? null,
+        target:    n.workout?.workout?.title ?? null,
         workoutId: n.workout?._id ?? null,
-        commentId: n.comment ?? null,
+        comment:   n.comment ?? null,
       };
     });
 

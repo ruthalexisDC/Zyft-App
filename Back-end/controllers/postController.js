@@ -2,6 +2,7 @@
 // import User from '../models/User.js';
 // import Comment, { REACTION_EMOJIS } from '../models/Comments.js';
 // import Report from '../models/Report.js';
+// import Notification from '../models/Notification.js';
 
 // // ─────────────────────────────────────────
 // // CREATE POST
@@ -219,9 +220,27 @@
 //       return res.status(403).json({ message: 'Not authorized to update this post' });
 //     }
 
+//     // ── SECURITY FIX (2026-07-10) ────────────────────────
+//     // This used to do `{ $set: req.body }` — i.e. it trusted the ENTIRE
+//     // request body and wrote it straight into the document. The ownership
+//     // check above only verifies the CURRENT owner before the update; it does
+//     // nothing to stop the request body itself from overwriting fields like
+//     // `user` (hijack post ownership), `respects` (fake likes), `createdAt`,
+//     // or any other field on the schema. This is a classic mass-assignment
+//     // vulnerability. Fix: whitelist only the fields a user should be able to
+//     // edit on their own post.
+//     // ────────────────────────
+//     const EDITABLE_FIELDS = ['content', 'media', 'visibility'];
+//     const updates = {};
+//     for (const field of EDITABLE_FIELDS) {
+//       if (req.body[field] !== undefined) {
+//         updates[field] = req.body[field];
+//       }
+//     }
+
 //     const updatedPost = await Post.findByIdAndUpdate(
 //       req.params.postId,
-//       { $set: req.body },
+//       { $set: updates },
 //       { new: true, runValidators: true }
 //     );
 
@@ -303,6 +322,25 @@
 
 //     await post.save();
 
+//     // ── NOTIFICATION: notify the post owner when they receive a NEW respect ──
+//     // Only fires when someone is *adding* a respect (not removing one), and
+//     // never notifies a user about their own action.
+//     if (!alreadyRespected && post.user.toString() !== userId.toString()) {
+//       try {
+//         await Notification.create({
+//           recipient: post.user,
+//           sender: userId,
+//           type: 'respect',
+//           workout: post.workout || undefined,
+//           comment: undefined,
+//         });
+//       } catch (notifErr) {
+//         // Don't fail the respect action if notification creation fails —
+//         // just log it so the core interaction still succeeds.
+//         console.error('Failed to create respect notification:', notifErr);
+//       }
+//     }
+
 //     res.json({
 //       success: true,
 //       respected: !alreadyRespected,
@@ -310,6 +348,38 @@
 //     });
 //   } catch (error) {
 //     res.status(500).json({ message: 'Failed to give respect', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GET RESPECTS (who liked this post)
+// // ─────────────────────────────────────────
+// export const getRespects = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const currentUserId = req.user._id.toString();
+
+//     const post = await Post.findById(postId).populate(
+//       'respects',
+//       'name handle avatar bio followers'
+//     );
+
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     const users = post.respects.map((u) => ({
+//       id: u._id,
+//       name: u.name,
+//       handle: `@${u.handle}`,
+//       avatar: u.avatar,
+//       bio: u.bio,
+//       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
+//     }));
+
+//     res.json({ users });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to fetch respects', error: error.message });
 //   }
 // };
 
@@ -375,6 +445,22 @@
 
 //     const commentObj = comment.toObject({ virtuals: true });
 //     commentObj.myReaction = null;
+
+//     // ── NOTIFICATION: notify the post owner about the new comment ──
+//     // Skipped when commenting on your own post.
+//     if (post.user.toString() !== userId.toString()) {
+//       try {
+//         await Notification.create({
+//           recipient: post.user,
+//           sender: userId,
+//           type: 'comment',
+//           workout: post.workout || undefined,
+//           comment: comment._id,
+//         });
+//       } catch (notifErr) {
+//         console.error('Failed to create comment notification:', notifErr);
+//       }
+//     }
 
 //     res.status(201).json({ success: true, comment: commentObj });
 //   } catch (error) {
@@ -494,11 +580,145 @@
 //   }
 // };
 
+// // ─────────────────────────────────────────
+// // REPOST
+// // ─────────────────────────────────────────
+// export const repost = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const originalPost = await Post.findById(postId);
+//     if (!originalPost) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     const alreadyReposted = await Post.findOne({
+//       user: userId,
+//       originalPost: postId,
+//       isRepost: true,
+//     });
+
+//     if (alreadyReposted) {
+//       await Post.findByIdAndDelete(alreadyReposted._id);
+//       return res.json({ success: true, reposted: false, message: 'Repost removed' });
+//     }
+
+//     const newRepost = await Post.create({
+//       user: userId,
+//       content: originalPost.content,
+//       isRepost: true,
+//       originalPost: postId,
+//       workout: originalPost.workout,
+//     });
+
+//     await newRepost.populate('user', 'name handle avatar');
+//     await newRepost.populate('originalPost');
+
+//     res.status(201).json({ success: true, reposted: true, post: newRepost });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to repost', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // SAVE / UNSAVE
+// // ─────────────────────────────────────────
+// export const savePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     if (!user.savedPosts.includes(req.params.postId)) {
+//       user.savedPosts.push(req.params.postId);
+//       await user.save();
+//     }
+//     res.json({ success: true, saved: true });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// export const unsavePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     user.savedPosts = user.savedPosts.filter(
+//       (id) => id.toString() !== req.params.postId
+//     );
+//     await user.save();
+//     res.json({ success: true, saved: false });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // HIDE / UNHIDE
+// // ─────────────────────────────────────────
+// export const hidePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     if (!user.hiddenPosts.includes(req.params.postId)) {
+//       user.hiddenPosts.push(req.params.postId);
+//       await user.save();
+//     }
+//     res.json({ success: true, hidden: true });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// export const unhidePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     user.hiddenPosts = user.hiddenPosts.filter(
+//       (id) => id.toString() !== req.params.postId
+//     );
+//     await user.save();
+//     res.json({ success: true, hidden: false });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // REPORT
+// // ─────────────────────────────────────────
+// export const reportPost = async (req, res) => {
+//   try {
+//     const { reason } = req.body;
+//     const report = new Report({
+//       post: req.params.postId,
+//       reporter: req.user._id,
+//       reason,
+//       status: 'pending',
+//       createdAt: new Date(),
+//     });
+//     await report.save();
+//     res.json({ success: true, message: 'Report submitted successfully' });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // SHARE TRACKING
+// // ─────────────────────────────────────────
+// export const trackShare = async (req, res) => {
+//   try {
+//     const post = await Post.findById(req.params.postId);
+//     if (!post) return res.status(404).json({ message: 'Post not found' });
+//     post.shareCount = (post.shareCount || 0) + 1;
+//     await post.save();
+//     res.json({ success: true, shareCount: post.shareCount });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
 
 import Post from '../models/Post.js';
 import User from '../models/User.js';
 import Comment, { REACTION_EMOJIS } from '../models/Comments.js';
 import Report from '../models/Report.js';
+import Notification from '../models/Notification.js';
 
 // ─────────────────────────────────────────
 // CREATE POST
@@ -818,6 +1038,26 @@ export const giveRespect = async (req, res) => {
 
     await post.save();
 
+    // ── NOTIFICATION: notify the post owner when they receive a NEW respect ──
+    // Only fires when someone is *adding* a respect (not removing one), and
+    // never notifies a user about their own action.
+    if (!alreadyRespected && post.user.toString() !== userId.toString()) {
+      try {
+        await Notification.create({
+          recipient: post.user,
+          sender: userId,
+          type: 'respect',
+          // NOTE: post.workout is an embedded subdocument (no own ObjectId
+          // in a separate collection), so we reference the Post itself here.
+          workout: post._id,
+        });
+      } catch (notifErr) {
+        // Don't fail the respect action if notification creation fails —
+        // just log it so the core interaction still succeeds.
+        console.error('Failed to create respect notification:', notifErr);
+      }
+    }
+
     res.json({
       success: true,
       respected: !alreadyRespected,
@@ -922,6 +1162,26 @@ export const addComment = async (req, res) => {
 
     const commentObj = comment.toObject({ virtuals: true });
     commentObj.myReaction = null;
+
+    // ── NOTIFICATION: notify the post owner about the new comment ──
+    // Skipped when commenting on your own post.
+    if (post.user.toString() !== userId.toString()) {
+      try {
+        await Notification.create({
+          recipient: post.user,
+          sender: userId,
+          type: 'comment',
+          // NOTE: post.workout is an embedded subdocument, not a separate
+          // Workout document, so we reference the Post itself here.
+          workout: post._id,
+          // Notification.comment is a String (used for the quoted preview
+          // in the UI), not a reference to the Comment document.
+          comment: comment.content,
+        });
+      } catch (notifErr) {
+        console.error('Failed to create comment notification:', notifErr);
+      }
+    }
 
     res.status(201).json({ success: true, comment: commentObj });
   } catch (error) {
