@@ -163,10 +163,14 @@ router.get("/", auth, async (req, res) => {
     const notifications = await Notification.find({ recipient: req.user._id })
       .sort({ createdAt: -1 })
       .limit(50)
-      .populate("sender", "name handle avatar")
+      .populate("sender", "name handle avatar followers")
       // `workout` references a Post document — its embedded workout title
       // lives at `workout.title`, and post text lives at `content`.
       .populate("workout", "workout.title content");
+
+    // Current user's id, used below to work out — per notification —
+    // whether *you* already follow the sender ("Following" vs "Follow back").
+    const currentUserId = req.user._id.toString();
 
     const shaped = notifications.map((n) => {
       const base = {
@@ -180,14 +184,20 @@ router.get("/", auth, async (req, res) => {
         return { ...base, emoji: n.emoji, title: n.title, subtitle: n.subtitle };
       }
 
+      // n.sender.followers is the list of people following the sender.
+      // If it contains the current user, you already follow them back.
+      const isFollowing =
+        n.sender?.followers?.some((id) => id.toString() === currentUserId) ?? false;
+
       return {
         ...base,
         user: {
-          id:       n.sender._id,
-          name:     n.sender.name,
-          handle:   `@${n.sender.handle}`,
-          initials: initials(n.sender.name),
-          avatar:   n.sender.avatar,
+          id:          n.sender._id,
+          name:        n.sender.name,
+          handle:      `@${n.sender.handle}`,
+          initials:    initials(n.sender.name),
+          avatar:      n.sender.avatar,
+          isFollowing,
         },
         content:   actionText(n.type),
         target:    n.workout?.workout?.title ?? null,

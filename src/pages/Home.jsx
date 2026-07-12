@@ -16,9 +16,10 @@ import axios from "axios";
 import WorkoutSplitModal from "../components/WorkoutSplitModal";
 import FeedPostCard from "../components/FeedPostCard";
 import { useSocket } from "../context/SocketContext.jsx";
+import { API_ORIGIN } from "../config";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const API_URL = "http://localhost:5000";
+const API_URL = API_ORIGIN;
 
 // ─── Skeleton primitive (shared shape/feel across the app) ───
 const Skel = ({ className = "" }) => (

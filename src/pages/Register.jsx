@@ -3,8 +3,13 @@ import { useState } from "react";
 import { useAuth } from "../context/AuthContext.jsx";
 import { Link, useNavigate } from "react-router-dom";
 import logo from "../assets/Zyft.png";
+import api from "../api/axios";
+import { API_ORIGIN } from "../config";
 
-const API_URL = "http://localhost:5000/api/auth";
+// window.location.href redirects (below) need a full absolute URL, so this
+// stays separate from the shared `api` instance — but it now derives from
+// the same single source of truth as everything else.
+const API_URL = `${API_ORIGIN}/api/auth`;
 
 // ========== TOAST COMPONENT ==========
 const Toast = ({ message, type, onClose }) => {
@@ -296,23 +301,16 @@ const EmailRegisterForm = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch(`${API_URL}/register/email`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
+      await api.post("/auth/register/email", {
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Registration failed");
 
       showToast("Account created successfully! Please sign in.", "success");
       setTimeout(() => navigate("/login"), 2000);
     } catch (err) {
-      setError(err.message);
+      setError(err.response?.data?.message || err.message);
     } finally {
       setIsLoading(false);
     }

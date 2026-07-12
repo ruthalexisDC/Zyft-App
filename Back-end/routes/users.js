@@ -583,30 +583,48 @@ router.post("/id/:id/follow", auth, async (req, res) => {
 
     const isFollowing = targetUser.followers.some((id) => id.toString() === currentUserId.toString());
 
+    // Atomic $addToSet/$pull — see the matching note in POST /:handle/follow
+    // for why this replaces the old read-then-push-then-save pattern.
     if (isFollowing) {
-      // Unfollow
-      targetUser.followers = targetUser.followers.filter((id) => id.toString() !== currentUserId.toString());
-      currentUser.following = currentUser.following.filter((id) => id.toString() !== targetId);
+      await Promise.all([
+        User.updateOne({ _id: targetId }, { $pull: { followers: currentUserId } }),
+        User.updateOne({ _id: currentUserId }, { $pull: { following: targetId } }),
+      ]);
     } else {
-      // Follow
-      targetUser.followers.push(currentUserId);
-      currentUser.following.push(targetId);
+      await Promise.all([
+        User.updateOne({ _id: targetId }, { $addToSet: { followers: currentUserId } }),
+        User.updateOne({ _id: currentUserId }, { $addToSet: { following: targetId } }),
+      ]);
 
       if (targetUser.notificationPreferences?.follow !== false) {
-        await Notification.create({
+        // Reuse an existing unread follow notification instead of stacking
+        // up duplicates on unfollow/re-follow cycles.
+        const existing = await Notification.findOne({
           recipient: targetId,
           sender: currentUserId,
           type: "follow",
+          read: false,
         });
+
+        if (existing) {
+          existing.createdAt = new Date();
+          await existing.save();
+        } else {
+          await Notification.create({
+            recipient: targetId,
+            sender: currentUserId,
+            type: "follow",
+          });
+        }
       }
     }
 
-    await Promise.all([targetUser.save(), currentUser.save()]);
+    const refreshedTarget = await User.findById(targetId).select("followers following");
 
     res.json({
       following: !isFollowing,
-      followersCount: targetUser.followers.length,
-      followingCount: targetUser.following.length,
+      followersCount: refreshedTarget.followers.length,
+      followingCount: refreshedTarget.following.length,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -798,29 +816,58 @@ router.post("/:handle/follow", auth, async (req, res) => {
       return res.status(400).json({ message: "You cannot follow yourself" });
     }
 
-    const isFollowing = target.followers.includes(req.user._id);
+    const currentUserId = req.user._id;
+    const wasFollowing = target.followers.some((id) => id.equals(currentUserId));
 
-    if (isFollowing) {
-      target.followers.pull(req.user._id);
-      req.user.following.pull(target._id);
+    // Atomic toggle: $addToSet/$pull are idempotent at the DB level, so even
+    // if two follow clicks land at nearly the same time, the follower list
+    // can never end up with the same id twice. This replaces the previous
+    // read-then-.push()-then-.save() pattern, which had a race window where
+    // two concurrent requests could both see "not following" and both push,
+    // producing a duplicate follower entry (and, below, a duplicate
+    // notification).
+    if (wasFollowing) {
+      await Promise.all([
+        User.updateOne({ _id: target._id }, { $pull: { followers: currentUserId } }),
+        User.updateOne({ _id: currentUserId }, { $pull: { following: target._id } }),
+      ]);
     } else {
-      target.followers.push(req.user._id);
-      req.user.following.push(target._id);
+      await Promise.all([
+        User.updateOne({ _id: target._id }, { $addToSet: { followers: currentUserId } }),
+        User.updateOne({ _id: currentUserId }, { $addToSet: { following: target._id } }),
+      ]);
 
       if (target.notificationPreferences?.follow !== false) {
-        await Notification.create({
+        // Reuse an existing unread "X started following you" notification
+        // instead of always inserting a new document. Without this, an
+        // unfollow/re-follow cycle (or a double-fired request) leaves
+        // multiple "started following you" cards for the same person
+        // sitting in the feed, which is the duplicate-card bug this fixes.
+        const existing = await Notification.findOne({
           recipient: target._id,
-          sender: req.user._id,
+          sender: currentUserId,
           type: "follow",
+          read: false,
         });
+
+        if (existing) {
+          existing.createdAt = new Date();
+          await existing.save();
+        } else {
+          await Notification.create({
+            recipient: target._id,
+            sender: currentUserId,
+            type: "follow",
+          });
+        }
       }
     }
 
-    await Promise.all([target.save(), req.user.save()]);
+    const followerCount = await User.findById(target._id).select("followers").then((u) => u.followers.length);
 
     res.json({
-      following: !isFollowing,
-      followerCount: target.followers.length,
+      following: !wasFollowing,
+      followerCount,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
