@@ -18,12 +18,12 @@
 // import HelpCenter from "./pages/HelpCenter";
 // import PrivacyPolicy from "./pages/PrivacyPolicy";
 // import TermsOfService from "./pages/TermsOfService";
-// import ResetPassword from "./pages/ForgotPassword";
 // import WorkoutPost from "./pages/WorkoutPost";
-
+// import NotificationSettings from "./pages/NotificationSettings";
+// import WorkoutDetailPage from "./pages/WorkoutDetailPage";
+// import VerifyEmail from "./pages/VerifyEmail";
 // function App() {
-//   const isDevMode = true;
-//   const { user, resetKey } = useAuth();
+//   const { user } = useAuth();
 
 //   return (
 //     <ThemeProvider>
@@ -35,155 +35,123 @@
 //             <Route path="/login" element={<Login />} />
 //             <Route path="/register" element={<Register />} />
 //             <Route path="/forgot-password" element={<ForgotPassword />} />
+//             <Route
+//               path="/settings/notifications"
+//               element={<NotificationSettings />}
+//             />
+//             <Route path="/verify-email" element={<VerifyEmail />} />
 
 //             {/* Protected routes (with bottom nav) */}
 //             <Route element={<Layout key={user?._id || "guest"} />}>
 //               <Route
 //                 path="/home"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <Home key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <Home key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
 //               <Route
 //                 path="/discover"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <Discover key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <Discover key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
 //               <Route
 //                 path="/log"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <LogWorkout key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <LogWorkout key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
 //               <Route
 //                 path="/activity"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <Activity key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <Activity key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
-
 //               <Route
 //                 path="/profile"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <Profile key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <Profile key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
 //               <Route
 //                 path="/profile/:userId"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <Profile key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <Profile key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
 //                 }
 //               />
 
+//               {/* SOCIAL POST — respects, comments, single image */}
 //               <Route
 //                 path="/workout/:workoutId"
 //                 element={
-//                   isDevMode ? (
+//                   <PrivateRoute>
 //                     <WorkoutPost key={user?._id || "guest"} />
-//                   ) : (
-//                     <PrivateRoute>
-//                       <WorkoutPost key={user?._id || "guest"} />
-//                     </PrivateRoute>
-//                   )
+//                   </PrivateRoute>
+//                 }
+//               />
+
+//               {/* WORKOUT PLAN DETAIL — exercises, sets, "Start Workout" */}
+//               <Route
+//                 path="/workout-plan/:workoutId"
+//                 element={
+//                   <PrivateRoute>
+//                     <WorkoutDetailPage />
+//                   </PrivateRoute>
 //                 }
 //               />
 //             </Route>
 
+//             {/* Other protected routes without bottom nav */}
 //             <Route
 //               path="/edit-profile"
 //               element={
-//                 isDevMode ? (
+//                 <PrivateRoute>
 //                   <EditProfile key={user?._id || "guest"} />
-//                 ) : (
-//                   <PrivateRoute>
-//                     <EditProfile key={user?._id || "guest"} />
-//                   </PrivateRoute>
-//                 )
+//                 </PrivateRoute>
 //               }
 //             />
 //             <Route
 //               path="/account-setting"
 //               element={
-//                 isDevMode ? (
+//                 <PrivateRoute>
 //                   <AccountSetting key={user?._id || "guest"} />
-//                 ) : (
-//                   <PrivateRoute>
-//                     <AccountSetting key={user?._id || "guest"} />
-//                   </PrivateRoute>
-//                 )
+//                 </PrivateRoute>
 //               }
 //             />
 //             <Route
 //               path="/help"
 //               element={
-//                 isDevMode ? (
+//                 <PrivateRoute>
 //                   <HelpCenter key={user?._id || "guest"} />
-//                 ) : (
-//                   <PrivateRoute>
-//                     <HelpCenter key={user?._id || "guest"} />
-//                   </PrivateRoute>
-//                 )
+//                 </PrivateRoute>
 //               }
 //             />
 //             <Route
 //               path="/privacy"
 //               element={
-//                 isDevMode ? (
+//                 <PrivateRoute>
 //                   <PrivacyPolicy key={user?._id || "guest"} />
-//                 ) : (
-//                   <PrivateRoute>
-//                     <PrivacyPolicy key={user?._id || "guest"} />
-//                   </PrivateRoute>
-//                 )
+//                 </PrivateRoute>
 //               }
 //             />
 //             <Route
 //               path="/terms"
 //               element={
-//                 isDevMode ? (
+//                 <PrivateRoute>
 //                   <TermsOfService key={user?._id || "guest"} />
-//                 ) : (
-//                   <PrivateRoute>
-//                     <TermsOfService key={user?._id || "guest"} />
-//                   </PrivateRoute>
-//                 )
+//                 </PrivateRoute>
 //               }
 //             />
 //           </Routes>
@@ -217,7 +185,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import WorkoutPost from "./pages/WorkoutPost";
 import NotificationSettings from "./pages/NotificationSettings";
-
+import WorkoutDetailPage from "./pages/WorkoutDetailPage.jsx";
+import VerifyEmail from "./pages/VerifyEmail.jsx";
+import VerifyEmailConfirm from "./pages/VerifyEmailConfirm.jsx";
 function App() {
   const { user } = useAuth();
 
@@ -234,6 +204,11 @@ function App() {
             <Route
               path="/settings/notifications"
               element={<NotificationSettings />}
+            />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+            <Route
+              path="/verify-email/confirm"
+              element={<VerifyEmailConfirm />}
             />
 
             {/* Protected routes (with bottom nav) */}
@@ -270,7 +245,6 @@ function App() {
                   </PrivateRoute>
                 }
               />
-
               <Route
                 path="/profile"
                 element={
@@ -288,6 +262,7 @@ function App() {
                 }
               />
 
+              {/* SOCIAL POST — respects, comments, single image */}
               <Route
                 path="/workout/:workoutId"
                 element={
@@ -296,8 +271,19 @@ function App() {
                   </PrivateRoute>
                 }
               />
+
+              {/* WORKOUT PLAN DETAIL — exercises, sets, "Start Workout" */}
+              <Route
+                path="/workout-plan/:workoutId"
+                element={
+                  <PrivateRoute>
+                    <WorkoutDetailPage />
+                  </PrivateRoute>
+                }
+              />
             </Route>
 
+            {/* Other protected routes without bottom nav */}
             <Route
               path="/edit-profile"
               element={

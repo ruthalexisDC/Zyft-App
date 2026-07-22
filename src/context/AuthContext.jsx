@@ -1,4 +1,175 @@
-import { createContext, useContext, useState, useEffect } from "react";
+// import {
+//   createContext,
+//   useContext,
+//   useState,
+//   useEffect,
+//   useCallback,
+// } from "react";
+// import api from "../api/axios.js";
+
+// const AuthContext = createContext(null);
+
+// export function AuthProvider({ children }) {
+//   const [user, setUser] = useState(null);
+//   const [authReady, setAuthReady] = useState(false);
+//   const [resetKey, setResetKey] = useState(0);
+
+//   // ── DEFINE logout FIRST with useCallback ──
+//   const logout = useCallback(() => {
+//     localStorage.removeItem("token");
+//     localStorage.removeItem("user");
+//     setUser(null);
+//     window.location.href = "/login";
+//   }, []);
+
+//   // ── OAuth token cleanup ──
+//   useEffect(() => {
+//     const params = new URLSearchParams(window.location.search);
+//     const urlToken = params.get("token");
+
+//     if (urlToken) {
+//       localStorage.setItem("token", urlToken);
+
+//       params.delete("token");
+//       const cleanSearch = params.toString();
+//       const newUrl =
+//         window.location.pathname +
+//         (cleanSearch ? `?${cleanSearch}` : "") +
+//         window.location.hash;
+//       window.history.replaceState({}, "", newUrl);
+//     }
+//   }, []);
+
+//   // ── Load user from localStorage on mount (optimistic) ──
+//   useEffect(() => {
+//     const storedUser = localStorage.getItem("user");
+
+//     if (storedUser) {
+//       try {
+//         const parsed = JSON.parse(storedUser);
+//         setUser(parsed);
+//       } catch (e) {
+//         console.error("Failed to parse stored user:", e);
+//         localStorage.removeItem("user");
+//       }
+//     }
+//     // NOTE: authReady is NOT set here — we wait for verification
+//   }, []);
+
+//   // ── Verify token and fetch fresh user data ──
+//   useEffect(() => {
+//     const token = localStorage.getItem("token");
+
+//     if (!token) {
+//       setAuthReady(true);
+//       return;
+//     }
+
+//     const verifyAuth = async () => {
+//       try {
+//         const res = await api.get("/users/me");
+//         const userData = res.data.user;
+
+//         setUser(userData);
+//         localStorage.setItem("user", JSON.stringify(userData));
+//       } catch (err) {
+//         console.error("Auth verification failed:", err);
+//         // Token invalid — clear everything
+//         localStorage.removeItem("token");
+//         localStorage.removeItem("user");
+//         setUser(null);
+//       } finally {
+//         setAuthReady(true);
+//       }
+//     };
+
+//     verifyAuth();
+//   }, [resetKey, logout]);
+
+//   // ── LOGIN ──
+//   const login = async (email, password) => {
+//     try {
+//       const res = await api.post("/auth/login", { email, password });
+//       const { token, user: userData } = res.data;
+
+//       localStorage.setItem("token", token);
+//       localStorage.setItem("user", JSON.stringify(userData));
+//       setUser(userData);
+
+//       return { success: true };
+//     } catch (err) {
+//       console.error("Login error:", err);
+//       return {
+//         success: false,
+//         error: err.response?.data?.message || "Login failed",
+//       };
+//     }
+//   };
+
+//   // ── REGISTER ──
+//   const register = async (userData) => {
+//     try {
+//       const res = await api.post("/auth/register/email", userData);
+//       const { user: newUser } = res.data;
+
+//       // Store token so user can access verify-email endpoint
+//       localStorage.setItem("token", newUser.token);
+
+//       return {
+//         success: true,
+//         user: newUser,
+//       };
+//     } catch (err) {
+//       console.error("Register error:", err);
+//       return {
+//         success: false,
+//         error: err.response?.data?.message || "Registration failed",
+//       };
+//     }
+//   };
+
+//   // ── UPDATE USER ──
+//   const updateUser = (updates) => {
+//     setUser((prev) => {
+//       const updated = { ...prev, ...updates };
+//       localStorage.setItem("user", JSON.stringify(updated));
+//       return updated;
+//     });
+//   };
+
+//   return (
+//     <AuthContext.Provider
+//       value={{
+//         user,
+//         authReady,
+//         resetKey,
+//         login,
+//         register,
+//         logout,
+//         updateUser,
+//         setResetKey,
+//       }}
+//     >
+//       {children}
+//     </AuthContext.Provider>
+//   );
+// }
+
+// export function useAuth() {
+//   const context = useContext(AuthContext);
+//   if (!context) {
+//     throw new Error("useAuth must be used within an AuthProvider");
+//   }
+//   return context;
+// }
+
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import api from "../api/axios.js";
 
 const AuthContext = createContext(null);
@@ -8,32 +179,53 @@ export function AuthProvider({ children }) {
   const [authReady, setAuthReady] = useState(false);
   const [resetKey, setResetKey] = useState(0);
 
-  // ── NEW: Pick up OAuth token from the URL (?token=...) if present ──
-  // This runs first so the token is in localStorage before the
-  // "load user" / "verify auth" effects below run.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get("token");
-
-    if (urlToken) {
-      localStorage.setItem("token", urlToken);
-      api.defaults.headers.common["Authorization"] = `Bearer ${urlToken}`;
-
-      // Strip the token out of the URL so it isn't left in browser
-      // history / visible in the address bar after we've stored it.
-      params.delete("token");
-      const cleanSearch = params.toString();
-      const newUrl =
-        window.location.pathname +
-        (cleanSearch ? `?${cleanSearch}` : "") +
-        window.location.hash;
-      window.history.replaceState({}, "", newUrl);
-    }
+  // ── DEFINE logout FIRST with useCallback ──
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    window.location.href = "/login";
   }, []);
 
-  // Load user from localStorage on mount
+  // ── OAuth token exchange ──
+  // The redirect from Google/Facebook now carries a short-lived, single-use
+  // `code` (not the JWT itself — see authSuccess in authRoutes.js for why).
+  // Swap it for the real token via a POST request, which never ends up in
+  // a URL, browser history, or a Referer header the way the old `?token=`
+  // param did.
   useEffect(() => {
-    const token = localStorage.getItem("token");
+    const params = new URLSearchParams(window.location.search);
+    const oauthCode = params.get("code");
+    if (!oauthCode) return;
+
+    // Strip the code from the URL immediately, before the network call —
+    // no reason to leave it sitting in the address bar/history any longer
+    // than necessary even though it's single-use.
+    params.delete("code");
+    const cleanSearch = params.toString();
+    const newUrl =
+      window.location.pathname +
+      (cleanSearch ? `?${cleanSearch}` : "") +
+      window.location.hash;
+    window.history.replaceState({}, "", newUrl);
+
+    api
+      .post("/auth/exchange", { code: oauthCode })
+      .then(({ data }) => {
+        if (data?.token) {
+          localStorage.setItem("token", data.token);
+          api.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
+          // Bump resetKey so anything depending on auth state re-reads it.
+          setResetKey((k) => k + 1);
+        }
+      })
+      .catch((err) => {
+        console.error("OAuth code exchange failed:", err);
+      });
+  }, []);
+
+  // ── Load user from localStorage on mount (optimistic) ──
+  useEffect(() => {
     const storedUser = localStorage.getItem("user");
 
     if (storedUser) {
@@ -45,12 +237,13 @@ export function AuthProvider({ children }) {
         localStorage.removeItem("user");
       }
     }
-    setAuthReady(true);
+    // NOTE: authReady is NOT set here — we wait for verification
   }, []);
 
-  // Verify token and fetch fresh user data
+  // ── Verify token and fetch fresh user data ──
   useEffect(() => {
     const token = localStorage.getItem("token");
+
     if (!token) {
       setAuthReady(true);
       return;
@@ -58,7 +251,6 @@ export function AuthProvider({ children }) {
 
     const verifyAuth = async () => {
       try {
-        // Try to get current user data from /api/users/me or similar endpoint
         const res = await api.get("/users/me");
         const userData = res.data.user;
 
@@ -66,38 +258,28 @@ export function AuthProvider({ children }) {
         localStorage.setItem("user", JSON.stringify(userData));
       } catch (err) {
         console.error("Auth verification failed:", err);
-        // If verification fails, try stored user
-        const storedUser = localStorage.getItem("user");
-        if (storedUser) {
-          try {
-            setUser(JSON.parse(storedUser));
-          } catch (e) {
-            logout();
-          }
-        }
+        // Token invalid — clear everything
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        setUser(null);
       } finally {
         setAuthReady(true);
       }
     };
 
     verifyAuth();
-  }, [resetKey]);
+  }, [resetKey, logout]);
 
+  // ── LOGIN ──
   const login = async (email, password) => {
     try {
       const res = await api.post("/auth/login", { email, password });
       const { token, user: userData } = res.data;
 
-      console.log("🔑 Login response:", res.data);
-      console.log("🔑 Login avatar:", userData?.avatar);
-
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(userData));
-
-      // Set default auth header
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
       setUser(userData);
+
       return { success: true };
     } catch (err) {
       console.error("Login error:", err);
@@ -108,18 +290,19 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // ── REGISTER ──
   const register = async (userData) => {
     try {
-      const res = await api.post("/auth/register", userData);
-      const { token, user: newUser } = res.data;
+      const res = await api.post("/auth/register/email", userData);
+      const { user: newUser } = res.data;
 
-      localStorage.setItem("token", token);
-      localStorage.setItem("user", JSON.stringify(newUser));
+      // Store token so user can access verify-email endpoint
+      localStorage.setItem("token", newUser.token);
 
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-
-      setUser(newUser);
-      return { success: true };
+      return {
+        success: true,
+        user: newUser,
+      };
     } catch (err) {
       console.error("Register error:", err);
       return {
@@ -129,14 +312,7 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    delete api.defaults.headers.common["Authorization"];
-    setUser(null);
-    window.location.href = "/login";
-  };
-
+  // ── UPDATE USER ──
   const updateUser = (updates) => {
     setUser((prev) => {
       const updated = { ...prev, ...updates };
@@ -144,14 +320,6 @@ export function AuthProvider({ children }) {
       return updated;
     });
   };
-
-  // Set auth header on mount if token exists
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    }
-  }, []);
 
   return (
     <AuthContext.Provider

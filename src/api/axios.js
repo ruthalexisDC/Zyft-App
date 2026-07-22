@@ -1,22 +1,3 @@
-// import axios from 'axios';
-
-// const api = axios.create({
-//   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000/api',
-//   headers: {
-//     'Content-Type': 'application/json',
-//   },
-// });
-
-// // Attach JWT token to every request automatically
-// api.interceptors.request.use((config) => {
-//   const token = localStorage.getItem('token');
-//   if (token) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   return config;
-// });
-
-// export default api; 
 
 // src/api/axios.js
 import axios from 'axios';
@@ -34,7 +15,7 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   
   // Skip auth header for public endpoints
-  const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password'];
+  const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/verify-email/confirm', '/auth/reset-password'];
   const isPublic = publicEndpoints.some(endpoint => config.url?.includes(endpoint));
   
   if (token && !isPublic) {

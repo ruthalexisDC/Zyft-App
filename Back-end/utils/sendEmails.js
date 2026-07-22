@@ -1,4 +1,4 @@
-// utils/sendEmail.js
+//utils/sendEmail.js
 import nodemailer from "nodemailer";
 
 export const sendEmail = async ({ to, subject, html }) => {
@@ -12,14 +12,6 @@ export const sendEmail = async ({ to, subject, html }) => {
     },
   });
 
-  // For production - Gmail/SES/etc
-  // const transporter = nodemailer.createTransport({
-  //   service: "gmail",
-  //   auth: {
-  //     user: process.env.GMAIL_USER,
-  //     pass: process.env.GMAIL_APP_PASSWORD,
-  //   },
-  // });
 
   const mailOptions = {
     from: `"Zyft" <${process.env.EMAIL_FROM || "noreply@zyft.app"}>`,
@@ -27,6 +19,14 @@ export const sendEmail = async ({ to, subject, html }) => {
     subject,
     html,
   };
+
+  const info = await transporter.sendMail(mailOptions);
+  console.log("Email send result:", {
+    messageId: info.messageId,
+    accepted: info.accepted,
+    rejected: info.rejected,
+    response: info.response,
+  });
 
   await transporter.sendMail(mailOptions);
 };
