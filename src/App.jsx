@@ -187,7 +187,7 @@ import WorkoutPost from "./pages/WorkoutPost";
 import NotificationSettings from "./pages/NotificationSettings";
 import WorkoutDetailPage from "./pages/WorkoutDetailPage.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
-import VerifyEmailConfirm from "./pages/VerifyEmailConfirm.jsx";
+import VerifyEmailConfirm from "./pages/verifyEmailConfirm.jsx";
 function App() {
   const { user } = useAuth();
 
@@ -208,7 +208,7 @@ function App() {
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route
               path="/verify-email/confirm"
-              element={<VerifyEmailConfirm />}
+              element={<verifyEmailConfirm />}
             />
 
             {/* Protected routes (with bottom nav) */}
