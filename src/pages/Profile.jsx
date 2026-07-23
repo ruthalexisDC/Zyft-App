@@ -257,9 +257,15 @@ export default function Profile() {
 
       setIsFollowing(data.following);
 
+      // NOTE: the backend's /:handle profile route nests counts under
+      // `stats: { followers, following }`, so the local optimistic update
+      // has to match that same shape or the displayed count won't move.
       setProfileData((prev) => ({
         ...prev,
-        followersCount: data.followersCount,
+        stats: {
+          ...prev?.stats,
+          followers: data.followersCount ?? prev?.stats?.followers,
+        },
       }));
 
       setToast({
@@ -449,6 +455,13 @@ export default function Profile() {
   // ─── Merge real data with fallback ───
   // Same rule as avatarUrl above: authUser fallbacks (your own name/handle)
   // must never leak into someone else's profile view.
+  //
+  // NOTE on followers/following: the backend's GET /api/users/:handle (and
+  // /api/users/id/:id) route returns these nested under `stats`:
+  //   { stats: { workouts, followers, following } }
+  // NOT as flat `followersCount` / `followingCount` fields. Both counts
+  // below now read from `profileData.stats.*` to match that shape — this
+  // was the root cause of Followers/Following always showing 0.
   const displayUser = {
     _id: profileData?._id || targetUserId,
     name:
@@ -463,14 +476,13 @@ export default function Profile() {
     bio: profileData?.bio || "Fitness enthusiast pushing limits everyday 💪",
     focus: profileData?.focus || "Strength & Running",
     followers:
-      profileData?.followersCount >= 1000
-        ? `${(profileData.followersCount / 1000).toFixed(1)}k`
-        : //: profileData?.followersCount?.toString() || "0",
-          profileData?.stats?.followers?.toString() || "0",
+      profileData?.stats?.followers >= 1000
+        ? `${(profileData.stats.followers / 1000).toFixed(1)}k`
+        : profileData?.stats?.followers?.toString() || "0",
     following:
-      profileData?.followingCount >= 1000
-        ? `${(profileData.followingCount / 1000).toFixed(1)}k`
-        : profileData?.followingCount?.toString() || "0",
+      profileData?.stats?.following >= 1000
+        ? `${(profileData.stats.following / 1000).toFixed(1)}k`
+        : profileData?.stats?.following?.toString() || "0",
     workouts: posts.length.toString(),
     photo: avatarUrl,
   };
