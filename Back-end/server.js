@@ -87,7 +87,8 @@ const CLIENT_ORIGINS = [
   'http://localhost:5174',
   'https://localhost:5173',
   'https://localhost:5174',
-  'https://zyft-application.onrender.com'
+  'https://zyft-app.onrender.com',
+  'https://zyft-app-five.vercel.app'   // ← add this
 ];
 
 app.use(cors({
