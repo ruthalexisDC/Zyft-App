@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
+import { API_ORIGIN } from "../config";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const API_URL = "http://localhost:5000";
+//const API_URL = "http://localhost:5000";
+const API_URL = API_ORIGIN;
 
 const TEMPLATES = {
   PPL: ["Push", "Pull", "Legs", "Rest", "Push", "Pull", "Rest"],
