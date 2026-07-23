@@ -465,7 +465,8 @@ export default function Profile() {
     followers:
       profileData?.followersCount >= 1000
         ? `${(profileData.followersCount / 1000).toFixed(1)}k`
-        : profileData?.followersCount?.toString() || "0",
+        : //: profileData?.followersCount?.toString() || "0",
+          profileData?.stats?.followers?.toString() || "0",
     following:
       profileData?.followingCount >= 1000
         ? `${(profileData.followingCount / 1000).toFixed(1)}k`
