@@ -1,7 +1,9 @@
 // src/api/interactions.js
 import axios from 'axios';
+import { API_ORIGIN } from '../config';
 
-const API_URL = 'http://localhost:5000/api/posts';
+//const API_URL = 'http://localhost:5000/api/posts';
+const API_URL = `${API_ORIGIN}/api/posts`;
 
 const getToken = () => localStorage.getItem('token');
 

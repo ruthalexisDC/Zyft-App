@@ -1,8 +1,10 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { API_ORIGIN } from "../config";
 
-const API_URL = "http://localhost:5000/api/auth";
+//const API_URL = "http://localhost:5000/api/auth";
+const API_URL = `${API_ORIGIN}/api/auth`;
 
 export default function FacebookCallback() {
   const navigate = useNavigate();

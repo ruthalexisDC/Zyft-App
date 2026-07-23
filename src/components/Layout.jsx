@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { Home, Compass, Plus, PersonStanding, User } from "lucide-react";
 import VerifyEmailBanner from "./VerifyEmailBanner";
+import { API_ORIGIN } from "../config";
 
-const API_URL = "http://localhost:5000";
+const API_URL = API_ORIGIN;
 
 async function fetchUnreadCount() {
   try {
