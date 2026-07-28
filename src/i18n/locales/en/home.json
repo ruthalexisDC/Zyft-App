@@ -1,0 +1,46 @@
+{
+  "greeting": {
+    "morning": "Good morning",
+    "afternoon": "Good afternoon",
+    "evening": "Good evening"
+  },
+  "athleteFallback": "Athlete",
+  "energy": {
+    "title": "Today's Energy",
+    "refreshTitle": "Refresh stats",
+    "setGoalTitle": "Tap to set daily goal",
+    "goalProgressTitle": "Goal progress",
+    "goalsSuffix": "goals",
+    "thisWeek": "This Week",
+    "totalCalories": "Total Calories",
+    "splitCompliance": "Split Compliance"
+  },
+  "split": {
+    "title": "This Week's Split",
+    "today": "Today:",
+    "rest": "Rest"
+  },
+  "days": {
+    "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun"
+  },
+  "quickActions": {
+    "readyPrompt": "Ready?",
+    "logWorkout": "Log Workout",
+    "checkPrompt": "Check",
+    "myGoals": "My Goals"
+  },
+  "feed": {
+    "following": "Following",
+    "community": "Community",
+    "notFollowingAnyone": "You're not following anyone yet.",
+    "discoverInCommunity": "Discover people in the Community feed →",
+    "noPosts": "No posts yet. Be the first to share a workout!",
+    "loadMore": "Load more posts"
+  },
+  "goalModal": {
+    "title": "Set Daily Goal",
+    "subtitle": "How many workouts today?",
+    "placeholder": "e.g. 3",
+    "setGoal": "Set Goal"
+  }
+}

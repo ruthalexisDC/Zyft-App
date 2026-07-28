@@ -1,0 +1,53 @@
+{
+  "header": "Log Workout",
+  "subtitle": "Track your progress",
+
+  "form": {
+    "titleLabel": "Workout Title",
+    "titlePlaceholder": "e.g. Morning Chest Day",
+    "categoryLabel": "Category",
+    "durationLabel": "Duration (min)",
+    "durationPlaceholder": "45",
+    "caloriesLabel": "Calories",
+    "caloriesPlaceholder": "300",
+    "notesLabel": "Notes",
+    "notesPlaceholder": "How did it feel?"
+  },
+
+  "exercises": {
+    "label": "Exercises",
+    "add": "Add",
+    "searchPlaceholder": "Search exercises...",
+    "noMatches": "No matches — using \"{{name}}\" as custom name",
+    "sets": "Sets",
+    "reps": "Reps",
+    "weightUnit": "kg"
+  },
+
+  "photo": {
+    "label": "Workout Photo",
+    "choosePhoto": "Choose a photo",
+    "tapToChange": "Tap to change",
+    "optional": "Optional - share your workout"
+  },
+
+  "submit": {
+    "uploading": "Uploading...",
+    "saving": "Saving...",
+    "logWorkout": "Log Workout"
+  },
+
+  "errors": {
+    "saveFailed": "Failed to log workout",
+    "networkError": "Network error"
+  },
+
+  "categoryLabels": {
+    "Strength": "Strength",
+    "Cardio": "Cardio",
+    "HIIT": "HIIT",
+    "Pilates": "Pilates",
+    "Yoga": "Yoga",
+    "Other": "Other"
+  }
+}

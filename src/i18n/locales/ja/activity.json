@@ -1,0 +1,42 @@
+{
+  "header": "アクティビティ",
+
+  "stats": {
+    "respects": "リスペクト",
+    "comments": "コメント",
+    "followers": "フォロワー"
+  },
+
+  "tabs": {
+    "all": "すべて",
+    "unread": "未読",
+    "respects": "リスペクト",
+    "comments": "コメント",
+    "followers": "フォロワー"
+  },
+
+  "sections": {
+    "new": "新着",
+    "newCount": "新着{{count}}件",
+    "markAllRead": "すべて既読にする",
+    "earlier": "それ以前"
+  },
+
+  "card": {
+    "reply": "返信",
+    "viewPost": "投稿を見る",
+    "viewProfile": "プロフィールを見る",
+    "followBack": "フォローを返す",
+    "following": "フォロー中",
+    "unreadPrefix": "未読："
+  },
+
+  "empty": {
+    "title": "まだ通知はありません",
+    "subtitle": "何かあったらお知らせします"
+  },
+
+  "errors": {
+    "loadFailed": "通知の読み込みに失敗しました"
+  }
+}

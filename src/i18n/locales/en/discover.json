@@ -1,0 +1,77 @@
+{
+  "header": "Discover",
+  "searchPlaceholder": "Search workouts, athletes...",
+  "loadError": "Couldn't load fresh data — showing cached recommendations.",
+
+  "profileMenu": {
+    "myProfile": "My Profile",
+    "settings": "Settings",
+    "logOut": "Log Out"
+  },
+
+  "quickFilters": {
+    "allLevels": "All Levels"
+  },
+
+  "categoriesTitle": "Categories",
+
+  "trending": {
+    "title": "Trending",
+    "showLess": "Show less",
+    "seeAll": "See all",
+    "noResults": "No workouts match your filters"
+  },
+
+  "recommended": {
+    "title": "Recommended for you",
+    "seeAll": "See all",
+    "noResults": "No recommendations match your filters"
+  },
+
+  "people": {
+    "title": "People you may like",
+    "seeAll": "See all",
+    "noResults": "No users match your filters",
+    "workoutsLabel": "Workouts",
+    "followersLabel": "Followers",
+    "follow": "Follow",
+    "following": "Following"
+  },
+
+  "filterModal": {
+    "title": "Filter & Sort",
+    "category": "Category",
+    "difficultyLevel": "Difficulty Level",
+    "sortBy": "Sort By",
+    "reset": "Reset",
+    "applyFilters": "Apply Filters"
+  },
+
+  "categoryLabels": {
+    "Strength": "Strength",
+    "Cardio": "Cardio",
+    "HIIT": "HIIT",
+    "Pilates": "Pilates",
+    "Yoga": "Yoga",
+    "Other": "Other"
+  },
+
+  "levelLabels": {
+    "Beginner": "Beginner",
+    "Intermediate": "Intermediate",
+    "Advanced": "Advanced"
+  },
+
+  "sortLabels": {
+    "Popular": "Popular",
+    "Newest": "Newest",
+    "Trending": "Trending"
+  },
+
+  "durationLabels": {
+    "< 20 min": "< 20 min",
+    "< 30 min": "< 30 min",
+    "< 45 min": "< 45 min",
+    "45+ min": "45+ min"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "appName": "Zyft",
+  "cancel": "Cancel",
+  "save": "Save",
+  "edit": "Edit",
+  "delete": "Delete",
+  "back": "Back",
+  "loading": "Loading...",
+  "settings": "Settings",
+  "signOut": "Sign Out",
+  "loggingOut": "Logging out...",
+  "signedOutSuccess": "Signed out successfully",
+
+  "nav": {
+    "account": "Account",
+    "preferences": "Preferences",
+    "dangerZone": "Danger Zone"
+  },
+
+  "toggle": {
+    "on": "On",
+    "off": "Off"
+  }
+}

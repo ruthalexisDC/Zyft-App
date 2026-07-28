@@ -1,0 +1,77 @@
+{
+  "header": "発見",
+  "searchPlaceholder": "ワークアウトやユーザーを検索...",
+  "loadError": "最新データを読み込めませんでした。キャッシュされたおすすめを表示しています。",
+
+  "profileMenu": {
+    "myProfile": "マイプロフィール",
+    "settings": "設定",
+    "logOut": "ログアウト"
+  },
+
+  "quickFilters": {
+    "allLevels": "すべてのレベル"
+  },
+
+  "categoriesTitle": "カテゴリー",
+
+  "trending": {
+    "title": "トレンド",
+    "showLess": "折りたたむ",
+    "seeAll": "すべて見る",
+    "noResults": "条件に一致するワークアウトがありません"
+  },
+
+  "recommended": {
+    "title": "おすすめ",
+    "seeAll": "すべて見る",
+    "noResults": "条件に一致するおすすめがありません"
+  },
+
+  "people": {
+    "title": "おすすめのユーザー",
+    "seeAll": "すべて見る",
+    "noResults": "条件に一致するユーザーがいません",
+    "workoutsLabel": "ワークアウト",
+    "followersLabel": "フォロワー",
+    "follow": "フォロー",
+    "following": "フォロー中"
+  },
+
+  "filterModal": {
+    "title": "絞り込み・並び替え",
+    "category": "カテゴリー",
+    "difficultyLevel": "難易度",
+    "sortBy": "並び替え",
+    "reset": "リセット",
+    "applyFilters": "フィルターを適用"
+  },
+
+  "categoryLabels": {
+    "Strength": "筋力トレーニング",
+    "Cardio": "有酸素運動",
+    "HIIT": "HIIT",
+    "Pilates": "ピラティス",
+    "Yoga": "ヨガ",
+    "Other": "その他"
+  },
+
+  "levelLabels": {
+    "Beginner": "初級",
+    "Intermediate": "中級",
+    "Advanced": "上級"
+  },
+
+  "sortLabels": {
+    "Popular": "人気",
+    "Newest": "新着",
+    "Trending": "トレンド"
+  },
+
+  "durationLabels": {
+    "< 20 min": "20分未満",
+    "< 30 min": "30分未満",
+    "< 45 min": "45分未満",
+    "45+ min": "45分以上"
+  }
+}

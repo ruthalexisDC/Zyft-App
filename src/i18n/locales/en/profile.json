@@ -1,0 +1,77 @@
+{
+  "followers": "Followers",
+  "following": "Following",
+  "follow": "Follow",
+  "workouts": "Workouts",
+  "streak": "Streak",
+  "prs": "PRs",
+  "editProfile": "Edit Profile",
+  "seeAll": "See all",
+  "noWorkoutsPosted": "No workouts posted yet",
+  "postedByOther": "This user hasn't posted yet",
+  "workoutFallback": "Workout",
+  "profilePhotoAlt": "Profile",
+
+  "header": {
+    "profile": "Profile",
+    "othersProfile": "{{name}}'s Profile"
+  },
+
+  "toast": {
+    "following": "Following {{name}}",
+    "unfollowed": "Unfollowed {{name}}",
+    "followFailed": "Failed to follow user",
+    "signedOut": "Signed out successfully"
+  },
+
+  "errors": {
+    "pleaseLogIn": "Please log in to view profiles",
+    "loadFailed": "Failed to load profile"
+  },
+
+  "time": {
+    "justNow": "Just now",
+    "hoursAgo": "{{count}}h ago",
+    "yesterday": "Yesterday"
+  },
+
+  "fallback": {
+    "yourName": "Your Name",
+    "bio": "Fitness enthusiast pushing limits everyday 💪",
+    "focus": "Strength & Running"
+  },
+
+  "achievements": {
+    "title": "Achievements",
+    "dayStreak": "{{count}}-Day Streak",
+    "workoutsCount": "{{count}} Workouts",
+    "prsCount": "{{count}} PRs",
+    "newcomer": "Newcomer"
+  },
+
+  "tabs": {
+    "post": "Post",
+    "stats": "Stats"
+  },
+
+  "post": {
+    "weight": "Weight",
+    "reps": "Reps",
+    "duration": "Duration"
+  },
+
+  "weeklySummary": {
+    "title": "Weekly Summary",
+    "totalVolume": "Total Volume",
+    "avgDuration": "Avg Duration",
+    "caloriesBurned": "Calories Burned",
+    "sessions": "Sessions"
+  },
+
+  "goalProgress": {
+    "title": "Goal Progress",
+    "workoutsThisMonth": "Workouts this month",
+    "caloriesGoal": "Calories goal",
+    "streakGoal": "Streak goal"
+  }
+}

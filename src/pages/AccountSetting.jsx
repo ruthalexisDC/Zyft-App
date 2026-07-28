@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import axios from "axios";
+import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
   LogOut,
@@ -19,9 +20,15 @@ import {
 } from "lucide-react";
 import { deleteAccount } from "../api/posts";
 
+const LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "ja", label: "日本語" },
+];
+
 export default function AccountSettings() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { i18n } = useTranslation();
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -31,6 +38,7 @@ export default function AccountSettings() {
   );
   const [isPrivate, setIsPrivate] = useState(false);
   const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   // ─── Load current privacy setting ───
   useEffect(() => {
@@ -115,6 +123,20 @@ export default function AccountSettings() {
     }
   };
 
+  // ─── Change language ───
+  const changeLanguage = (lng) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem("lang", lng);
+    setShowLanguageModal(false);
+    showToast(
+      lng === "ja" ? "言語を日本語に変更しました" : "Language set to English",
+      "success",
+    );
+  };
+
+  const currentLanguageLabel =
+    LANGUAGES.find((l) => l.code === i18n.language)?.label || "English";
+
   const settingsGroups = [
     {
       title: "Account",
@@ -148,8 +170,8 @@ export default function AccountSettings() {
         {
           icon: <Globe size={16} className="text-green-400" />,
           label: "Language",
-          value: "English",
-          action: () => {},
+          value: currentLanguageLabel,
+          action: () => setShowLanguageModal(true),
         },
         {
           icon: (
@@ -362,6 +384,53 @@ export default function AccountSettings() {
                 Delete
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Language Selection Modal ── */}
+      {showLanguageModal && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+          <div className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-xs border border-white/10 shadow-xl">
+            <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-3">
+              <Globe size={20} className="text-green-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-center mb-4">
+              Select Language
+            </h3>
+            <div className="space-y-2 mb-4">
+              {LANGUAGES.map((lang) => (
+                <button
+                  key={lang.code}
+                  onClick={() => changeLanguage(lang.code)}
+                  className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition-colors ${
+                    i18n.language === lang.code
+                      ? "bg-green-500/10 text-green-400 border border-green-500/30"
+                      : "bg-white/5 text-gray-300 hover:bg-white/10 border border-transparent"
+                  }`}
+                >
+                  {lang.label}
+                  {i18n.language === lang.code && (
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                    >
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setShowLanguageModal(false)}
+              className="w-full py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

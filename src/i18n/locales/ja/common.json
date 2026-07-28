@@ -1,0 +1,24 @@
+{
+  "appName": "Zyft",
+  "cancel": "キャンセル",
+  "save": "保存",
+  "edit": "編集",
+  "delete": "削除",
+  "back": "戻る",
+  "loading": "読み込み中...",
+  "settings": "設定",
+  "signOut": "サインアウト",
+  "loggingOut": "サインアウト中...",
+  "signedOutSuccess": "サインアウトしました",
+
+  "nav": {
+    "account": "アカウント",
+    "preferences": "環境設定",
+    "dangerZone": "危険な操作"
+  },
+
+  "toggle": {
+    "on": "オン",
+    "off": "オフ"
+  }
+}

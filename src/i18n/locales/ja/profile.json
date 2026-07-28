@@ -1,0 +1,77 @@
+{
+  "followers": "フォロワー",
+  "following": "フォロー中",
+  "follow": "フォロー",
+  "workouts": "ワークアウト",
+  "streak": "連続記録",
+  "prs": "自己ベスト",
+  "editProfile": "プロフィールを編集",
+  "seeAll": "すべて見る",
+  "noWorkoutsPosted": "まだワークアウトが投稿されていません",
+  "postedByOther": "このユーザーはまだ投稿していません",
+  "workoutFallback": "ワークアウト",
+  "profilePhotoAlt": "プロフィール",
+
+  "header": {
+    "profile": "プロフィール",
+    "othersProfile": "{{name}}のプロフィール"
+  },
+
+  "toast": {
+    "following": "{{name}}をフォローしました",
+    "unfollowed": "{{name}}のフォローを解除しました",
+    "followFailed": "フォローに失敗しました",
+    "signedOut": "ログアウトしました"
+  },
+
+  "errors": {
+    "pleaseLogIn": "プロフィールを表示するにはログインしてください",
+    "loadFailed": "プロフィールの読み込みに失敗しました"
+  },
+
+  "time": {
+    "justNow": "たった今",
+    "hoursAgo": "{{count}}時間前",
+    "yesterday": "昨日"
+  },
+
+  "fallback": {
+    "yourName": "あなたの名前",
+    "bio": "毎日限界に挑戦するフィットネス愛好家 💪",
+    "focus": "筋力トレーニング & ランニング"
+  },
+
+  "achievements": {
+    "title": "実績",
+    "dayStreak": "{{count}}日連続",
+    "workoutsCount": "{{count}}回のワークアウト",
+    "prsCount": "{{count}}件の自己ベスト",
+    "newcomer": "新規参加者"
+  },
+
+  "tabs": {
+    "post": "投稿",
+    "stats": "統計"
+  },
+
+  "post": {
+    "weight": "重量",
+    "reps": "レップ数",
+    "duration": "時間"
+  },
+
+  "weeklySummary": {
+    "title": "週間サマリー",
+    "totalVolume": "総ボリューム",
+    "avgDuration": "平均時間",
+    "caloriesBurned": "消費カロリー",
+    "sessions": "セッション数"
+  },
+
+  "goalProgress": {
+    "title": "目標の進捗",
+    "workoutsThisMonth": "今月のワークアウト",
+    "caloriesGoal": "カロリー目標",
+    "streakGoal": "連続記録目標"
+  }
+}

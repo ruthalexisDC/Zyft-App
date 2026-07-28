@@ -1,0 +1,42 @@
+{
+  "header": "Activity",
+
+  "stats": {
+    "respects": "Respects",
+    "comments": "Comments",
+    "followers": "Followers"
+  },
+
+  "tabs": {
+    "all": "All",
+    "unread": "Unread",
+    "respects": "Respects",
+    "comments": "Comments",
+    "followers": "Followers"
+  },
+
+  "sections": {
+    "new": "New",
+    "newCount": "{{count}} new",
+    "markAllRead": "Mark all read",
+    "earlier": "Earlier"
+  },
+
+  "card": {
+    "reply": "Reply",
+    "viewPost": "View post",
+    "viewProfile": "View profile",
+    "followBack": "Follow back",
+    "following": "Following",
+    "unreadPrefix": "Unread: "
+  },
+
+  "empty": {
+    "title": "No notifications yet",
+    "subtitle": "We'll let you know when something happens"
+  },
+
+  "errors": {
+    "loadFailed": "Failed to load notifications"
+  }
+}

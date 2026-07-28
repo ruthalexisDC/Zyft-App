@@ -1,0 +1,27 @@
+{
+  "privacy": "プライバシー",
+  "private": "非公開",
+  "public": "公開",
+  "notifications": "通知",
+  "darkMode": "ダークモード",
+  "language": "言語",
+  "verificationStatus": "認証ステータス",
+  "verified": "認証済み",
+  "notVerified": "未認証",
+
+  "deleteAccount": "アカウントを削除",
+  "deleteAccountTitle": "アカウントを削除しますか？",
+  "deleteAccountBody": "アカウント、投稿、データはすべて完全に削除されます。この操作は取り消せません。",
+
+  "selectLanguage": "言語を選択",
+
+  "toast": {
+    "privacySetToPrivate": "アカウントを非公開にしました",
+    "privacySetToPublic": "アカウントを公開にしました",
+    "privacyUpdateFailed": "プライバシー設定の更新に失敗しました",
+    "accountDeleted": "アカウントを削除しました",
+    "accountDeleteFailed": "アカウントの削除に失敗しました"
+  },
+
+  "appVersion": "Zyft v{{version}}"
+}

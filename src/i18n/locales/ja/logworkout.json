@@ -1,0 +1,53 @@
+{
+  "header": "ワークアウトを記録",
+  "subtitle": "進捗を記録しましょう",
+
+  "form": {
+    "titleLabel": "ワークアウト名",
+    "titlePlaceholder": "例：朝の胸トレ",
+    "categoryLabel": "カテゴリー",
+    "durationLabel": "時間（分）",
+    "durationPlaceholder": "45",
+    "caloriesLabel": "カロリー",
+    "caloriesPlaceholder": "300",
+    "notesLabel": "メモ",
+    "notesPlaceholder": "調子はどうでしたか？"
+  },
+
+  "exercises": {
+    "label": "種目",
+    "add": "追加",
+    "searchPlaceholder": "種目を検索...",
+    "noMatches": "一致する種目がありません。「{{name}}」をカスタム名として使用します",
+    "sets": "セット",
+    "reps": "回数",
+    "weightUnit": "kg"
+  },
+
+  "photo": {
+    "label": "ワークアウト写真",
+    "choosePhoto": "写真を選択",
+    "tapToChange": "タップして変更",
+    "optional": "任意 - ワークアウトをシェアしよう"
+  },
+
+  "submit": {
+    "uploading": "アップロード中...",
+    "saving": "保存中...",
+    "logWorkout": "ワークアウトを記録"
+  },
+
+  "errors": {
+    "saveFailed": "ワークアウトの記録に失敗しました",
+    "networkError": "ネットワークエラー"
+  },
+
+  "categoryLabels": {
+    "Strength": "筋力トレーニング",
+    "Cardio": "有酸素運動",
+    "HIIT": "HIIT",
+    "Pilates": "ピラティス",
+    "Yoga": "ヨガ",
+    "Other": "その他"
+  }
+}

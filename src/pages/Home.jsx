@@ -1,6 +1,762 @@
+// import { useState, useEffect, useMemo, useCallback } from "react";
+// import { Link } from "react-router-dom";
+// import { useAuth } from "../context/AuthContext.jsx";
+// import {
+//   Loader2,
+//   RefreshCw,
+//   Target,
+//   Dumbbell,
+//   Zap,
+//   Flame,
+//   CalendarDays,
+// } from "lucide-react";
+// import { getPosts, updatePost, deletePost, respectPost } from "../api/posts";
+// import { getUserStats, updateUserGoal } from "../api/stats";
+// import axios from "axios";
+// import WorkoutSplitModal from "../components/WorkoutSplitModal";
+// import FeedPostCard from "../components/FeedPostCard";
+// import { useSocket } from "../context/SocketContext.jsx";
+// import { API_ORIGIN } from "../config";
+
+// const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+// const API_URL = API_ORIGIN;
+
+// // ─── Skeleton primitive (shared shape/feel across the app) ───
+// const Skel = ({ className = "" }) => (
+//   <div className={`bg-white/[0.06] rounded-lg animate-pulse ${className}`} />
+// );
+
+// // ─── Energy card stats skeleton (mirrors the 3-tile grid) ───
+// const EnergyStatsSkeleton = () => (
+//   <div className="grid grid-cols-3 gap-3">
+//     {Array.from({ length: 3 }).map((_, i) => (
+//       <div
+//         key={i}
+//         className="bg-white/5 border border-white/5 rounded-xl p-3 flex flex-col items-center gap-1.5"
+//       >
+//         <Skel className="w-7 h-7 rounded-full" />
+//         <Skel className="h-5 w-8" />
+//         <Skel className="h-2 w-14" />
+//       </div>
+//     ))}
+//   </div>
+// );
+
+// // ─── Single feed post skeleton (mirrors FeedPostCard's rough shape) ───
+// const FeedPostSkeleton = () => (
+//   <div className="bg-[#13131f] rounded-2xl border border-white/5 p-4">
+//     <div className="flex items-center gap-3 mb-3">
+//       <Skel className="w-10 h-10 rounded-full shrink-0" />
+//       <div className="flex-1 space-y-1.5">
+//         <Skel className="h-3.5 w-1/3" />
+//         <Skel className="h-2.5 w-1/4" />
+//       </div>
+//     </div>
+//     <Skel className="w-full h-40 rounded-xl mb-3" />
+//     <div className="flex gap-2">
+//       <Skel className="flex-1 h-10 rounded-xl" />
+//       <Skel className="flex-1 h-10 rounded-xl" />
+//       <Skel className="flex-1 h-10 rounded-xl" />
+//     </div>
+//   </div>
+// );
+
+// const FeedSkeleton = () => (
+//   <div className="space-y-4">
+//     {Array.from({ length: 3 }).map((_, i) => (
+//       <FeedPostSkeleton key={i} />
+//     ))}
+//   </div>
+// );
+
+// // ─── Full-page skeleton shown while auth is initializing ───
+// const HomeSkeleton = () => (
+//   <div className="min-h-screen bg-[#0a0a0a] text-white pt-4 pb-28 px-4 max-w-lg mx-auto">
+//     {/* Header */}
+//     <div className="flex items-center justify-between mb-6">
+//       <div className="space-y-2">
+//         <Skel className="h-2.5 w-10" />
+//         <Skel className="h-4 w-40" />
+//       </div>
+//       <Skel className="w-9 h-9 rounded-full" />
+//     </div>
+
+//     {/* Energy card */}
+//     <div className="bg-[#13131f] rounded-2xl p-4 mb-4 border border-white/5">
+//       <div className="flex items-center justify-between mb-3">
+//         <Skel className="h-4 w-28" />
+//         <Skel className="h-5 w-20 rounded-full" />
+//       </div>
+//       <Skel className="h-1.5 w-full rounded-full mb-4" />
+//       <EnergyStatsSkeleton />
+//       <div className="mt-3 pt-3 border-t border-white/5">
+//         <Skel className="h-2.5 w-24 mb-2" />
+//         <div className="flex gap-1">
+//           {DAYS.map((d) => (
+//             <Skel key={d} className="flex-1 h-9 rounded-lg" />
+//           ))}
+//         </div>
+//       </div>
+//     </div>
+
+//     {/* Quick actions */}
+//     <div className="grid grid-cols-2 gap-3 mb-6">
+//       <Skel className="h-16 rounded-2xl" />
+//       <Skel className="h-16 rounded-2xl" />
+//     </div>
+
+//     {/* Feed tabs */}
+//     <div className="flex items-center justify-between mb-4">
+//       <Skel className="h-8 w-40 rounded-xl" />
+//       <Skel className="h-3 w-12" />
+//     </div>
+
+//     {/* Feed */}
+//     <FeedSkeleton />
+//   </div>
+// );
+
+// export default function Home() {
+//   const { user, authReady, resetKey } = useAuth();
+//   const [posts, setPosts] = useState([]);
+//   const [loading, setLoading] = useState(true);
+//   const [error, setError] = useState(null);
+//   const [stats, setStats] = useState(null);
+//   const [statsLoading, setStatsLoading] = useState(true);
+//   const [showGoalModal, setShowGoalModal] = useState(false);
+//   const [newGoalInput, setNewGoalInput] = useState("");
+
+//   const [showSplitModal, setShowSplitModal] = useState(false);
+//   const [userSplit, setUserSplit] = useState(Array(7).fill("Rest"));
+//   const [splitLoading, setSplitLoading] = useState(false);
+//   const { isUserOnline } = useSocket();
+
+//   // ── Feed tab state: "community" (global/public) or "following" ──
+//   const [feedType, setFeedType] = useState("community");
+
+//   // ── NEW: Fetch full user profile to get avatar ──
+//   const [fullUser, setFullUser] = useState(null);
+
+//   useEffect(() => {
+//     if (!authReady || !user?._id) return;
+
+//     const fetchFullUser = async () => {
+//       try {
+//         const token = localStorage.getItem("token");
+//         const { data } = await axios.get(
+//           `${API_URL}/api/users/id/${user._id}`,
+//           {
+//             headers: { Authorization: `Bearer ${token}` },
+//           },
+//         );
+//         setFullUser(data.user);
+//       } catch (err) {
+//         console.error("Failed to fetch full user:", err);
+//       }
+//     };
+
+//     fetchFullUser();
+//   }, [authReady, user?._id, resetKey]);
+
+//   // Use full user data if available, fallback to auth context user
+//   const currentUser = fullUser || user;
+
+//   const refreshStats = useCallback(async () => {
+//     if (!user?._id) return;
+//     setStatsLoading(true);
+//     try {
+//       const { data } = await getUserStats();
+//       setStats(data);
+//     } catch (err) {
+//       console.error("Failed to refresh stats:", err);
+//     } finally {
+//       setStatsLoading(false);
+//     }
+//   }, [user?._id]);
+
+//   const fetchUserSplit = useCallback(async () => {
+//     if (!user?._id) return;
+//     setSplitLoading(true);
+//     try {
+//       const token = localStorage.getItem("token");
+//       const { data } = await axios.get(
+//         `${API_URL}/api/users/${user._id}/split`,
+//         {
+//           headers: {
+//             Authorization: `Bearer ${token}`,
+//           },
+//         },
+//       );
+//       if (data.split) setUserSplit(data.split);
+//     } catch (err) {
+//       console.log("No split found, using default");
+//     } finally {
+//       setSplitLoading(false);
+//     }
+//   }, [user?._id]);
+
+//   // Fetch posts for whichever feed tab is active
+//   const fetchPosts = useCallback(async (type, signalCancelled) => {
+//     setLoading(true);
+//     setError(null);
+//     try {
+//       const { data } = await getPosts({ type, limit: 50 });
+//       if (signalCancelled?.()) return;
+//       setPosts(data.posts ?? []);
+//     } catch (err) {
+//       if (signalCancelled?.()) return;
+//       console.error(err.response?.data?.message || err.message);
+//       setError(err.response?.data?.message || "Failed to load data");
+//     } finally {
+//       if (!signalCancelled?.()) setLoading(false);
+//     }
+//   }, []);
+
+//   useEffect(() => {
+//     if (!authReady) return;
+//     setStats(null);
+//     setPosts([]);
+//     setError(null);
+//     setLoading(true);
+//     setStatsLoading(true);
+//     setUserSplit(Array(7).fill("Rest"));
+//   }, [authReady, resetKey]);
+
+//   // Stats load once per auth/reset cycle — not tied to feed tab
+//   useEffect(() => {
+//     if (!authReady) return;
+//     let cancelled = false;
+
+//     async function loadStats() {
+//       try {
+//         const { data } = await getUserStats();
+//         if (cancelled) return;
+//         setStats(data);
+//       } catch (err) {
+//         if (cancelled) return;
+//         console.error(err.response?.data?.message || err.message);
+//       } finally {
+//         if (!cancelled) setStatsLoading(false);
+//       }
+//     }
+
+//     loadStats();
+//     return () => {
+//       cancelled = true;
+//     };
+//   }, [authReady, resetKey]);
+
+//   // Posts reload whenever auth/reset cycles OR the feed tab changes
+//   useEffect(() => {
+//     if (!authReady) return;
+//     let cancelled = false;
+//     fetchPosts(feedType, () => cancelled);
+//     return () => {
+//       cancelled = true;
+//     };
+//   }, [authReady, resetKey, feedType, fetchPosts]);
+
+//   useEffect(() => {
+//     if (stats) {
+//       console.log("Raw stats:", stats);
+//       console.log("Consistency:", stats.consistency);
+//       console.log("Workouts:", stats.workouts);
+//       console.log("Goals completed:", stats.goalsCompleted);
+//       console.log("Total goals:", stats.totalGoals);
+//     }
+//   }, [stats]);
+
+//   useEffect(() => {
+//     if (!authReady || !user?._id) return;
+//     fetchUserSplit();
+//   }, [authReady, user?._id, fetchUserSplit]);
+
+//   useEffect(() => {
+//     if (!authReady || !user?._id) return;
+//     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+//     const interval = setInterval(() => {
+//       console.log("⏰ 24hr tick — refreshing stats");
+//       refreshStats();
+//     }, TWENTY_FOUR_HOURS);
+//     return () => clearInterval(interval);
+//   }, [authReady, user?._id, refreshStats]);
+
+//   useEffect(() => {
+//     if (!stats) return;
+//     const allGoalsAchieved =
+//       stats.totalGoals > 0 && stats.goalsCompleted >= stats.totalGoals;
+//     if (!allGoalsAchieved) return;
+
+//     const now = new Date();
+//     const midnight = new Date(
+//       now.getFullYear(),
+//       now.getMonth(),
+//       now.getDate() + 1,
+//       0,
+//       0,
+//       0,
+//       0,
+//     );
+//     const msUntilMidnight = midnight.getTime() - now.getTime();
+
+//     console.log(
+//       `🎯 All goals achieved! Stats reset scheduled in ${Math.round(msUntilMidnight / 1000 / 60)} min`,
+//     );
+
+//     const timer = setTimeout(() => {
+//       console.log("🌅 Midnight — resetting stats for new day");
+//       setStats(null);
+//       refreshStats();
+//     }, msUntilMidnight);
+
+//     return () => clearTimeout(timer);
+//   }, [stats?.goalsCompleted, stats?.totalGoals, refreshStats]);
+
+//   const handleUpdatePost = async (postId, updates) => {
+//     try {
+//       const { data } = await updatePost(postId, updates);
+//       setPosts((prev) => prev.map((p) => (p._id === postId ? data : p)));
+//       return data;
+//     } catch (err) {
+//       console.error("Failed to update post:", err);
+//       throw err;
+//     }
+//   };
+
+//   const handleDeletePost = async (postId) => {
+//     if (!confirm("Delete this post? This can't be undone.")) return;
+//     try {
+//       await deletePost(postId);
+//       setPosts((prev) => prev.filter((p) => p._id !== postId));
+//     } catch {
+//       alert("Failed to delete post");
+//     }
+//   };
+
+//   const handleRespect = async (postId, currentRespected, currentCount) => {
+//     setPosts((prev) =>
+//       prev.map((p) =>
+//         p._id === postId
+//           ? {
+//               ...p,
+//               didRespect: !currentRespected,
+//               respectCount: currentRespected
+//                 ? currentCount - 1
+//                 : currentCount + 1,
+//             }
+//           : p,
+//       ),
+//     );
+//     try {
+//       await respectPost(postId, !currentRespected);
+//     } catch {
+//       setPosts((prev) =>
+//         prev.map((p) =>
+//           p._id === postId
+//             ? { ...p, didRespect: currentRespected, respectCount: currentCount }
+//             : p,
+//         ),
+//       );
+//     }
+//   };
+
+//   const handleSetGoal = async () => {
+//     const val = parseInt(newGoalInput);
+//     if (!val || val < 1) return;
+//     try {
+//       await updateUserGoal(val);
+//       refreshStats();
+//       setShowGoalModal(false);
+//       setNewGoalInput("");
+//     } catch (err) {
+//       console.error("Failed to set goal:", err);
+//     }
+//   };
+
+//   const userInitial = currentUser?.name?.charAt(0).toUpperCase() || "Y";
+
+//   const greeting = () => {
+//     const hour = new Date().getHours();
+//     if (hour < 12) return "Good morning";
+//     if (hour < 17) return "Good afternoon";
+//     return "Good evening";
+//   };
+
+//   const todayStats = useMemo(
+//     () =>
+//       stats ?? {
+//         goalsCompleted: 0,
+//         totalGoals: 0,
+//         workouts: 0,
+//         consistency: 0,
+//         calories: 0,
+//       },
+//     [stats],
+//   );
+
+//   const goalProgress = useMemo(() => {
+//     if (!todayStats.totalGoals) return 0;
+//     return Math.min(
+//       (todayStats.goalsCompleted / todayStats.totalGoals) * 100,
+//       100,
+//     );
+//   }, [todayStats.goalsCompleted, todayStats.totalGoals]);
+
+//   const todayIndex = useMemo(() => {
+//     const day = new Date().getDay();
+//     return day === 0 ? 6 : day - 1;
+//   }, []);
+
+//   const todayLabel = userSplit[todayIndex];
+
+//   if (!authReady) {
+//     return <HomeSkeleton />;
+//   }
+
+//   return (
+//     <div className="min-h-screen bg-[#0a0a0a] text-white pt-4 pb-28 px-4 max-w-lg mx-auto">
+//       {/* ── Header ── */}
+//       <div className="flex items-center justify-between mb-6">
+//         <div>
+//           <p className="text-xs text-gray-500 font-extrabold uppercase tracking-widest mb-0.5">
+//             Zyft
+//           </p>
+//           <h1 className="text-lg text-gray-300 leading-tight">
+//             {greeting()}, {currentUser?.name?.split(" ")[0] || "Athlete"} 👋
+//           </h1>
+//         </div>
+//         <div className="relative">
+//           <Link
+//             to="/profile"
+//             className="w-9 h-9 rounded-full bg-gradient-to-br from-[#8b5cf6] to-[#a78bfa] flex items-center justify-center overflow-hidden hover:ring-2 hover:ring-purple-400 transition-all"
+//           >
+//             {currentUser?.avatar ? (
+//               <img
+//                 src={currentUser.avatar}
+//                 alt="Profile"
+//                 className="w-full h-full object-cover"
+//               />
+//             ) : (
+//               <span className="text-sm font-bold">{userInitial}</span>
+//             )}
+//           </Link>
+//           {isUserOnline(currentUser?._id) && (
+//             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0a0a0a]" />
+//           )}
+//         </div>
+//       </div>
+
+//       {/* ── Today's Energy Card ── */}
+//       <div className="bg-[#13131f] rounded-2xl p-4 mb-4 border border-white/5 relative overflow-hidden">
+//         <div className="absolute -top-6 -right-6 w-32 h-32 bg-purple-600/10 rounded-full blur-2xl pointer-events-none" />
+
+//         <div className="flex items-center justify-between mb-1">
+//           <h2 className="text-sm font-semibold text-gray-300">
+//             Today's Energy
+//           </h2>
+//           <div className="flex items-center gap-2">
+//             <button
+//               onClick={refreshStats}
+//               disabled={statsLoading}
+//               className="text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-30"
+//               title="Refresh stats"
+//             >
+//               <RefreshCw
+//                 size={12}
+//                 className={statsLoading ? "animate-spin" : ""}
+//               />
+//             </button>
+
+//             <button
+//               onClick={() => !todayStats.totalGoals && setShowGoalModal(true)}
+//               className={`text-xs px-2.5 py-1 rounded-full flex items-center gap-1.5 transition-all ${
+//                 todayStats.totalGoals
+//                   ? "text-gray-400 bg-[#2a2a3e] border border-white/5"
+//                   : "text-gray-500 bg-white/5 hover:bg-white/10 hover:text-gray-300 border border-white/5"
+//               }`}
+//               title={
+//                 todayStats.totalGoals
+//                   ? "Goal progress"
+//                   : "Tap to set daily goal"
+//               }
+//             >
+//               <Target
+//                 size={12}
+//                 className={
+//                   todayStats.totalGoals ? "text-gray-500" : "text-gray-600"
+//                 }
+//               />
+//               {todayStats.goalsCompleted}/{todayStats.totalGoals || "—"} goals
+//             </button>
+//           </div>
+//         </div>
+
+//         <div className="w-full h-1.5 bg-white/10 rounded-full mb-4 overflow-hidden">
+//           <div
+//             className="h-full bg-gradient-to-r from-[#8b5cf6] to-[#a78bfa] rounded-full transition-all duration-700"
+//             style={{ width: `${goalProgress}%` }}
+//           />
+//         </div>
+
+//         {statsLoading ? (
+//           <EnergyStatsSkeleton />
+//         ) : (
+//           <div className="grid grid-cols-3 gap-3">
+//             <Link
+//               to="/workouts"
+//               className="bg-[#8b5cf6]/10 border border-[#8b5cf6]/20 rounded-xl p-3 flex flex-col items-center gap-1 hover:bg-[#8b5cf6]/20 transition-colors"
+//             >
+//               <div className="w-7 h-7 rounded-full bg-[#8b5cf6]/20 flex items-center justify-center">
+//                 <Target size={14} className="text-purple-400" />
+//               </div>
+//               <span className="text-lg font-bold">{todayStats.workouts}</span>
+//               <span className="text-[10px] text-gray-500">This Week</span>
+//             </Link>
+
+//             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex flex-col items-center gap-1">
+//               <div className="w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center">
+//                 <Zap size={14} className="text-yellow-400" />
+//               </div>
+//               <span className="text-lg font-bold">{todayStats.calories}</span>
+//               <span className="text-[10px] text-gray-500">Total Calories</span>
+//             </div>
+
+//             <button
+//               onClick={() => setShowSplitModal(true)}
+//               className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex flex-col items-center gap-1 hover:bg-blue-500/20 transition-colors relative group"
+//             >
+//               <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center">
+//                 <Flame size={14} className="text-blue-400" />
+//               </div>
+//               <span className="text-lg font-bold">
+//                 {todayStats.consistency ?? 0}%
+//               </span>
+//               <span className="text-[10px] text-gray-500">
+//                 Split Compliance
+//               </span>
+//               <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+//                 <CalendarDays size={10} className="text-blue-400" />
+//               </div>
+//             </button>
+//           </div>
+//         )}
+
+//         {!splitLoading && (
+//           <div className="mt-3 pt-3 border-t border-white/5">
+//             <div className="flex items-center justify-between mb-1.5">
+//               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+//                 This Week's Split
+//               </span>
+//               <button
+//                 onClick={() => setShowSplitModal(true)}
+//                 className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
+//               >
+//                 Edit
+//               </button>
+//             </div>
+//             <div className="flex gap-1">
+//               {DAYS.map((day, i) => {
+//                 const isToday = i === todayIndex;
+//                 const isRest = userSplit[i] === "Rest";
+//                 return (
+//                   <div
+//                     key={day}
+//                     className={`flex-1 rounded-lg py-1.5 px-0.5 text-center transition-all ${
+//                       isToday
+//                         ? "bg-blue-500/20 border border-blue-500/30"
+//                         : isRest
+//                           ? "bg-white/5"
+//                           : "bg-purple-500/15 border border-purple-500/20"
+//                     }`}
+//                   >
+//                     <p
+//                       className={`text-[9px] font-bold ${isToday ? "text-blue-400" : "text-gray-500"}`}
+//                     >
+//                       {day[0]}
+//                     </p>
+//                     <p
+//                       className={`text-[8px] truncate ${isRest ? "text-gray-600" : isToday ? "text-blue-300" : "text-purple-300"}`}
+//                     >
+//                       {userSplit[i] === "Rest" ? "—" : userSplit[i]}
+//                     </p>
+//                   </div>
+//                 );
+//               })}
+//             </div>
+//             <p className="text-[10px] text-gray-500 mt-1.5 text-center">
+//               Today:{" "}
+//               <span
+//                 className={
+//                   todayLabel === "Rest"
+//                     ? "text-gray-500"
+//                     : "text-blue-400 font-semibold"
+//                 }
+//               >
+//                 {todayLabel}
+//               </span>
+//             </p>
+//           </div>
+//         )}
+//       </div>
+
+//       {/* ── Quick Actions ── */}
+//       <div className="grid grid-cols-2 gap-3 mb-6">
+//         <Link
+//           to="/log"
+//           className="bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] rounded-2xl p-4 flex items-center gap-3 hover:opacity-90 active:scale-[0.98] transition-all"
+//         >
+//           <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
+//             <Dumbbell size={18} className="text-white" />
+//           </div>
+//           <div>
+//             <p className="text-xs text-purple-200">Ready?</p>
+//             <p className="text-sm font-semibold text-white">Log Workout</p>
+//           </div>
+//         </Link>
+
+//         <Link
+//           to="/activity"
+//           className="bg-[#13131f] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:border-white/10 active:scale-[0.98] transition-all"
+//         >
+//           <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+//             <Target size={18} className="text-purple-400" />
+//           </div>
+//           <div>
+//             <p className="text-xs text-gray-500">Check</p>
+//             <p className="text-sm font-semibold text-white">My Goals</p>
+//           </div>
+//         </Link>
+//       </div>
+
+//       {/* ── Feed Header with Following/Community tabs ── */}
+//       <div className="flex items-center justify-between mb-4">
+//         <div className="flex items-center gap-1 bg-[#13131f] border border-white/5 rounded-xl p-1">
+//           <button
+//             onClick={() => setFeedType("following")}
+//             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+//               feedType === "following"
+//                 ? "bg-purple-600 text-white"
+//                 : "text-gray-500 hover:text-gray-300"
+//             }`}
+//           >
+//             Following
+//           </button>
+//           <button
+//             onClick={() => setFeedType("community")}
+//             className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
+//               feedType === "community"
+//                 ? "bg-purple-600 text-white"
+//                 : "text-gray-500 hover:text-gray-300"
+//             }`}
+//           >
+//             Community
+//           </button>
+//         </div>
+//         <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
+//           See all
+//         </button>
+//       </div>
+
+//       {/* ── Feed Posts ── */}
+//       {loading ? (
+//         <FeedSkeleton />
+//       ) : error ? (
+//         <div className="text-center py-10 text-red-400 text-sm">{error}</div>
+//       ) : posts.length === 0 ? (
+//         <div className="text-center py-10 text-gray-500 text-sm">
+//           {feedType === "following" ? (
+//             <>
+//               <p className="mb-3">You're not following anyone yet.</p>
+//               <button
+//                 onClick={() => setFeedType("community")}
+//                 className="text-purple-400 hover:text-purple-300 text-xs font-semibold"
+//               >
+//                 Discover people in the Community feed →
+//               </button>
+//             </>
+//           ) : (
+//             "No posts yet. Be the first to share a workout!"
+//           )}
+//         </div>
+//       ) : (
+//         <div className="space-y-4">
+//           {posts.map((post) => (
+//             <FeedPostCard
+//               key={post._id}
+//               post={post}
+//               currentUserId={user?._id}
+//               onUpdate={handleUpdatePost}
+//               onDelete={handleDeletePost}
+//               onRespect={handleRespect}
+//             />
+//           ))}
+//         </div>
+//       )}
+
+//       {!loading && posts.length > 0 && (
+//         <button className="w-full py-5 text-xs text-gray-600 hover:text-gray-400 transition-all flex items-center justify-center gap-2 mt-2">
+//           Load more posts
+//         </button>
+//       )}
+
+//       {/* ── Goal Setting Modal ── */}
+//       {showGoalModal && (
+//         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+//           <div className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-xs border border-white/10 shadow-xl">
+//             <h3 className="text-sm font-semibold mb-1">Set Daily Goal</h3>
+//             <p className="text-xs text-gray-500 mb-4">
+//               How many workouts today?
+//             </p>
+//             <input
+//               type="number"
+//               min="1"
+//               max="10"
+//               value={newGoalInput}
+//               onChange={(e) => setNewGoalInput(e.target.value)}
+//               onKeyDown={(e) => e.key === "Enter" && handleSetGoal()}
+//               placeholder="e.g. 3"
+//               autoFocus
+//               className="w-full bg-[#0a0a0a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/10 placeholder-gray-600 mb-4"
+//             />
+//             <div className="flex gap-2">
+//               <button
+//                 onClick={() => {
+//                   setShowGoalModal(false);
+//                   setNewGoalInput("");
+//                 }}
+//                 className="flex-1 py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
+//               >
+//                 Cancel
+//               </button>
+//               <button
+//                 onClick={handleSetGoal}
+//                 disabled={!newGoalInput || parseInt(newGoalInput) < 1}
+//                 className="flex-1 py-2.5 text-xs bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/30 rounded-xl transition-colors"
+//               >
+//                 Set Goal
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       <WorkoutSplitModal
+//         isOpen={showSplitModal}
+//         onClose={() => setShowSplitModal(false)}
+//         userId={user?._id}
+//         onSave={(data) => {
+//           setUserSplit(data.split);
+//           console.log("Split saved:", data.split);
+//         }}
+//       />
+//     </div>
+//   );
+// }
+
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
+import { useTranslation } from "react-i18next";
 import {
   Loader2,
   RefreshCw,
@@ -18,6 +774,8 @@ import FeedPostCard from "../components/FeedPostCard";
 import { useSocket } from "../context/SocketContext.jsx";
 import { API_ORIGIN } from "../config";
 
+// Internal keys used for data/indexing — NOT translated directly.
+// Display labels are looked up via t(`home:days.${DAYS[i].toLowerCase()}`).
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const API_URL = API_ORIGIN;
 
@@ -118,6 +876,7 @@ const HomeSkeleton = () => (
 
 export default function Home() {
   const { user, authReady, resetKey } = useAuth();
+  const { t } = useTranslation(["home", "common"]);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -375,11 +1134,12 @@ export default function Home() {
 
   const userInitial = currentUser?.name?.charAt(0).toUpperCase() || "Y";
 
+  // ── Greeting now pulls from home.json instead of hardcoded English ──
   const greeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 17) return "Good afternoon";
-    return "Good evening";
+    if (hour < 12) return t("home:greeting.morning");
+    if (hour < 17) return t("home:greeting.afternoon");
+    return t("home:greeting.evening");
   };
 
   const todayStats = useMemo(
@@ -419,10 +1179,11 @@ export default function Home() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="text-xs text-gray-500 font-extrabold uppercase tracking-widest mb-0.5">
-            Zyft
+            {t("common:appName")}
           </p>
           <h1 className="text-lg text-gray-300 leading-tight">
-            {greeting()}, {currentUser?.name?.split(" ")[0] || "Athlete"} 👋
+            {greeting()},{" "}
+            {currentUser?.name?.split(" ")[0] || t("home:athleteFallback")} 👋
           </h1>
         </div>
         <div className="relative">
@@ -433,7 +1194,7 @@ export default function Home() {
             {currentUser?.avatar ? (
               <img
                 src={currentUser.avatar}
-                alt="Profile"
+                alt={t("home:athleteFallback")}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -452,14 +1213,14 @@ export default function Home() {
 
         <div className="flex items-center justify-between mb-1">
           <h2 className="text-sm font-semibold text-gray-300">
-            Today's Energy
+            {t("home:energy.title")}
           </h2>
           <div className="flex items-center gap-2">
             <button
               onClick={refreshStats}
               disabled={statsLoading}
               className="text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-30"
-              title="Refresh stats"
+              title={t("home:energy.refreshTitle")}
             >
               <RefreshCw
                 size={12}
@@ -476,8 +1237,8 @@ export default function Home() {
               }`}
               title={
                 todayStats.totalGoals
-                  ? "Goal progress"
-                  : "Tap to set daily goal"
+                  ? t("home:energy.goalProgressTitle")
+                  : t("home:energy.setGoalTitle")
               }
             >
               <Target
@@ -486,7 +1247,8 @@ export default function Home() {
                   todayStats.totalGoals ? "text-gray-500" : "text-gray-600"
                 }
               />
-              {todayStats.goalsCompleted}/{todayStats.totalGoals || "—"} goals
+              {todayStats.goalsCompleted}/{todayStats.totalGoals || "—"}{" "}
+              {t("home:energy.goalsSuffix")}
             </button>
           </div>
         </div>
@@ -510,7 +1272,9 @@ export default function Home() {
                 <Target size={14} className="text-purple-400" />
               </div>
               <span className="text-lg font-bold">{todayStats.workouts}</span>
-              <span className="text-[10px] text-gray-500">This Week</span>
+              <span className="text-[10px] text-gray-500">
+                {t("home:energy.thisWeek")}
+              </span>
             </Link>
 
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex flex-col items-center gap-1">
@@ -518,7 +1282,9 @@ export default function Home() {
                 <Zap size={14} className="text-yellow-400" />
               </div>
               <span className="text-lg font-bold">{todayStats.calories}</span>
-              <span className="text-[10px] text-gray-500">Total Calories</span>
+              <span className="text-[10px] text-gray-500">
+                {t("home:energy.totalCalories")}
+              </span>
             </div>
 
             <button
@@ -532,7 +1298,7 @@ export default function Home() {
                 {todayStats.consistency ?? 0}%
               </span>
               <span className="text-[10px] text-gray-500">
-                Split Compliance
+                {t("home:energy.splitCompliance")}
               </span>
               <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <CalendarDays size={10} className="text-blue-400" />
@@ -545,19 +1311,23 @@ export default function Home() {
           <div className="mt-3 pt-3 border-t border-white/5">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
-                This Week's Split
+                {t("home:split.title")}
               </span>
               <button
                 onClick={() => setShowSplitModal(true)}
                 className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
               >
-                Edit
+                {t("common:edit")}
               </button>
             </div>
             <div className="flex gap-1">
               {DAYS.map((day, i) => {
                 const isToday = i === todayIndex;
                 const isRest = userSplit[i] === "Rest";
+                // DAYS entries (Mon/Tue/...) are internal keys — look up the
+                // localized label, then take its first character for the
+                // compact single-letter/kanji chip.
+                const dayLabel = t(`home:days.${day.toLowerCase()}`);
                 return (
                   <div
                     key={day}
@@ -572,11 +1342,14 @@ export default function Home() {
                     <p
                       className={`text-[9px] font-bold ${isToday ? "text-blue-400" : "text-gray-500"}`}
                     >
-                      {day[0]}
+                      {dayLabel.charAt(0)}
                     </p>
                     <p
                       className={`text-[8px] truncate ${isRest ? "text-gray-600" : isToday ? "text-blue-300" : "text-purple-300"}`}
                     >
+                      {/* "Rest" is a data value from the API/default state —
+                          translate it for display; any other value is a
+                          user-defined split name and stays as-is. */}
                       {userSplit[i] === "Rest" ? "—" : userSplit[i]}
                     </p>
                   </div>
@@ -584,7 +1357,7 @@ export default function Home() {
               })}
             </div>
             <p className="text-[10px] text-gray-500 mt-1.5 text-center">
-              Today:{" "}
+              {t("home:split.today")}{" "}
               <span
                 className={
                   todayLabel === "Rest"
@@ -592,7 +1365,7 @@ export default function Home() {
                     : "text-blue-400 font-semibold"
                 }
               >
-                {todayLabel}
+                {todayLabel === "Rest" ? t("home:split.rest") : todayLabel}
               </span>
             </p>
           </div>
@@ -609,8 +1382,12 @@ export default function Home() {
             <Dumbbell size={18} className="text-white" />
           </div>
           <div>
-            <p className="text-xs text-purple-200">Ready?</p>
-            <p className="text-sm font-semibold text-white">Log Workout</p>
+            <p className="text-xs text-purple-200">
+              {t("home:quickActions.readyPrompt")}
+            </p>
+            <p className="text-sm font-semibold text-white">
+              {t("home:quickActions.logWorkout")}
+            </p>
           </div>
         </Link>
 
@@ -622,8 +1399,12 @@ export default function Home() {
             <Target size={18} className="text-purple-400" />
           </div>
           <div>
-            <p className="text-xs text-gray-500">Check</p>
-            <p className="text-sm font-semibold text-white">My Goals</p>
+            <p className="text-xs text-gray-500">
+              {t("home:quickActions.checkPrompt")}
+            </p>
+            <p className="text-sm font-semibold text-white">
+              {t("home:quickActions.myGoals")}
+            </p>
           </div>
         </Link>
       </div>
@@ -639,7 +1420,7 @@ export default function Home() {
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            Following
+            {t("home:feed.following")}
           </button>
           <button
             onClick={() => setFeedType("community")}
@@ -649,11 +1430,11 @@ export default function Home() {
                 : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            Community
+            {t("home:feed.community")}
           </button>
         </div>
         <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-          See all
+          {t("common:seeAll")}
         </button>
       </div>
 
@@ -666,16 +1447,16 @@ export default function Home() {
         <div className="text-center py-10 text-gray-500 text-sm">
           {feedType === "following" ? (
             <>
-              <p className="mb-3">You're not following anyone yet.</p>
+              <p className="mb-3">{t("home:feed.notFollowingAnyone")}</p>
               <button
                 onClick={() => setFeedType("community")}
                 className="text-purple-400 hover:text-purple-300 text-xs font-semibold"
               >
-                Discover people in the Community feed →
+                {t("home:feed.discoverInCommunity")}
               </button>
             </>
           ) : (
-            "No posts yet. Be the first to share a workout!"
+            t("home:feed.noPosts")
           )}
         </div>
       ) : (
@@ -695,7 +1476,7 @@ export default function Home() {
 
       {!loading && posts.length > 0 && (
         <button className="w-full py-5 text-xs text-gray-600 hover:text-gray-400 transition-all flex items-center justify-center gap-2 mt-2">
-          Load more posts
+          {t("home:feed.loadMore")}
         </button>
       )}
 
@@ -703,9 +1484,11 @@ export default function Home() {
       {showGoalModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
           <div className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-xs border border-white/10 shadow-xl">
-            <h3 className="text-sm font-semibold mb-1">Set Daily Goal</h3>
+            <h3 className="text-sm font-semibold mb-1">
+              {t("home:goalModal.title")}
+            </h3>
             <p className="text-xs text-gray-500 mb-4">
-              How many workouts today?
+              {t("home:goalModal.subtitle")}
             </p>
             <input
               type="number"
@@ -714,7 +1497,7 @@ export default function Home() {
               value={newGoalInput}
               onChange={(e) => setNewGoalInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSetGoal()}
-              placeholder="e.g. 3"
+              placeholder={t("home:goalModal.placeholder")}
               autoFocus
               className="w-full bg-[#0a0a0a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/10 placeholder-gray-600 mb-4"
             />
@@ -726,14 +1509,14 @@ export default function Home() {
                 }}
                 className="flex-1 py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
               >
-                Cancel
+                {t("common:cancel")}
               </button>
               <button
                 onClick={handleSetGoal}
                 disabled={!newGoalInput || parseInt(newGoalInput) < 1}
                 className="flex-1 py-2.5 text-xs bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/30 rounded-xl transition-colors"
               >
-                Set Goal
+                {t("home:goalModal.setGoal")}
               </button>
             </div>
           </div>
