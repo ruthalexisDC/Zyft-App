@@ -8,6 +8,8 @@ import enHome from "./locales/en/home.json";
 import enDiscover from "./locales/en/discover.json";
 import enLogworkout from "./locales/en/logworkout.json";
 import enActivity from "./locales/en/activity.json";
+import enFeedpost from "./locales/en/feedpost.json";
+import enLegal from "./locales/en/legal.json";
 
 import jaCommon from "./locales/ja/common.json";
 import jaProfile from "./locales/ja/profile.json";
@@ -16,6 +18,8 @@ import jaHome from "./locales/ja/home.json";
 import jaDiscover from "./locales/ja/discover.json";
 import jaLogworkout from "./locales/ja/logworkout.json";
 import jaActivity from "./locales/ja/activity.json";
+import jaFeedpost from "./locales/ja/feedpost.json";
+import jaLegal from "./locales/ja/legal.json";
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -27,6 +31,8 @@ i18n.use(initReactI18next).init({
       discover: enDiscover,
       logworkout: enLogworkout,
       activity: enActivity,
+      feedpost: enFeedpost,
+      legal: enLegal,
     },
     ja: {
       common: jaCommon,
@@ -36,11 +42,23 @@ i18n.use(initReactI18next).init({
       discover: jaDiscover,
       logworkout: jaLogworkout,
       activity: jaActivity,
+      feedpost: jaFeedpost,
+      legal: jaLegal,
     },
   },
   lng: localStorage.getItem("lang") || "en", // manual switcher, no auto-detect
   fallbackLng: "en",
-  ns: ["common", "profile", "settings", "home", "discover", "logworkout", "activity"],
+  ns: [
+    "common",
+    "profile",
+    "settings",
+    "home",
+    "discover",
+    "logworkout",
+    "activity",
+    "feedpost",
+    "legal",
+  ],
   defaultNS: "common",
   interpolation: { escapeValue: false }, // React already escapes
 });

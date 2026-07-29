@@ -57,7 +57,10 @@
   "post": {
     "weight": "Weight",
     "reps": "Reps",
-    "duration": "Duration"
+    "duration": "Duration",
+    "durationUnit": "min",
+    "exercises": "Exercises",
+    "calories": "Calories"
   },
 
   "weeklySummary": {

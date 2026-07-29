@@ -28,7 +28,7 @@ const LANGUAGES = [
 export default function AccountSettings() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation("settings");
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -57,10 +57,10 @@ export default function AccountSettings() {
   };
 
   const handleLogout = () => {
-    showToast("Logging out...", "info", 1000);
+    showToast(t("toast.loggingOut"), "info");
     setTimeout(() => {
       logout();
-      showToast("Signed out successfully", "success", 1500);
+      showToast(t("toast.signedOut"), "success");
       setTimeout(() => navigate("/login"), 1500);
     }, 1000);
   };
@@ -70,11 +70,11 @@ export default function AccountSettings() {
     try {
       await deleteAccount();
       logout();
-      showToast("Account deleted");
+      showToast(t("toast.accountDeleted"));
       setTimeout(() => navigate("/login"), 1500);
     } catch (err) {
       console.error("Failed to delete account:", err);
-      showToast("Failed to delete account", "error");
+      showToast(t("toast.deleteFailed"), "error");
       setShowDeleteConfirm(false);
     } finally {
       setDeleteLoading(false);
@@ -98,7 +98,7 @@ export default function AccountSettings() {
   // ─── Toggle private account ───
   const togglePrivacy = async () => {
     const next = !isPrivate;
-    setIsPrivate(next); // optimistic
+    setIsPrivate(next);
     setPrivacyLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -109,15 +109,13 @@ export default function AccountSettings() {
       );
       setIsPrivate(data.isPrivate);
       showToast(
-        data.isPrivate
-          ? "Your account is now private"
-          : "Your account is now public",
+        data.isPrivate ? t("toast.privacyPrivate") : t("toast.privacyPublic"),
         "success",
       );
     } catch (err) {
       console.error("Failed to update privacy:", err);
-      setIsPrivate(!next); // revert on failure
-      showToast("Failed to update privacy setting", "error");
+      setIsPrivate(!next);
+      showToast(t("toast.privacyFailed"), "error");
     } finally {
       setPrivacyLoading(false);
     }
@@ -128,10 +126,7 @@ export default function AccountSettings() {
     i18n.changeLanguage(lng);
     localStorage.setItem("lang", lng);
     setShowLanguageModal(false);
-    showToast(
-      lng === "ja" ? "言語を日本語に変更しました" : "Language set to English",
-      "success",
-    );
+    showToast(t("toast.languageChanged"), "success");
   };
 
   const currentLanguageLabel =
@@ -139,50 +134,81 @@ export default function AccountSettings() {
 
   const settingsGroups = [
     {
-      title: "Account",
+      title: t("groups.account"),
       items: [
         {
+          id: "privacy",
           icon: <Shield size={16} className="text-purple-400" />,
-          label: "Privacy",
-          value: privacyLoading ? "..." : isPrivate ? "Private" : "Public",
+          label: t("items.privacy"),
+          value: privacyLoading
+            ? t("values.loading")
+            : isPrivate
+              ? t("values.private")
+              : t("values.public"),
           action: togglePrivacy,
         },
         {
+          id: "notifications",
           icon: <Bell size={16} className="text-blue-400" />,
-          label: "Notifications",
+          label: t("items.notifications"),
           action: () => navigate("/settings/notifications"),
         },
         {
+          id: "darkMode",
           icon: isDark ? (
             <Moon size={16} className="text-yellow-400" />
           ) : (
             <Sun size={16} className="text-yellow-400" />
           ),
-          label: "Dark Mode",
-          value: isDark ? "On" : "Off",
+          label: t("items.darkMode"),
+          value: isDark ? t("values.on") : t("values.off"),
           action: toggleTheme,
         },
       ],
     },
     {
-      title: "Preferences",
+      title: t("groups.preferences"),
       items: [
         {
+          id: "language",
           icon: <Globe size={16} className="text-green-400" />,
-          label: "Language",
+          label: t("items.language"),
           value: currentLanguageLabel,
           action: () => setShowLanguageModal(true),
         },
         {
+          id: "verification",
           icon: (
             <Verified
               size={16}
               className={user?.isVerified ? "text-green-400" : "text-gray-500"}
             />
           ),
-          label: "Verification Status",
-          value: user?.isVerified ? "Verified" : "Not Verified",
+          label: t("items.verificationStatus"),
+          value: user?.isVerified
+            ? t("values.verified")
+            : t("values.notVerified"),
           action: () => {},
+        },
+      ],
+    },
+    // ═══════════════════════════════════════════════════════
+    //  NEW: Legal group
+    // ═══════════════════════════════════════════════════════
+    {
+      title: t("groups.legal"),
+      items: [
+        {
+          id: "privacyPolicy",
+          icon: <FileText size={16} className="text-gray-400" />,
+          label: t("items.privacyPolicy"),
+          action: () => navigate("/privacy-policy"),
+        },
+        {
+          id: "termsOfService",
+          icon: <FileText size={16} className="text-gray-400" />,
+          label: t("items.termsOfService"),
+          action: () => navigate("/terms-of-service"),
         },
       ],
     },
@@ -255,7 +281,7 @@ export default function AccountSettings() {
         >
           <ArrowLeft size={18} />
         </button>
-        <h1 className="text-sm font-semibold">Settings</h1>
+        <h1 className="text-sm font-semibold">{t("header")}</h1>
         <div className="w-10 h-10 shrink-0" />
       </div>
 
@@ -276,17 +302,17 @@ export default function AccountSettings() {
         </div>
         <div className="flex-1 min-w-0">
           <h2 className="text-sm font-semibold truncate">
-            {user?.name || "User"}
+            {user?.name || t("fallbackName")}
           </h2>
           <p className="text-xs text-gray-500 truncate">
-            @{user?.handle || user?.username || "user"}
+            @{user?.handle || user?.username || t("fallbackHandle")}
           </p>
         </div>
         <Link
           to="/edit-profile"
           className="text-xs text-purple-400 hover:text-purple-300 font-medium"
         >
-          Edit
+          {t("edit")}
         </Link>
       </div>
 
@@ -300,9 +326,9 @@ export default function AccountSettings() {
             <div className="bg-[#13131f] rounded-2xl border border-white/5 overflow-hidden">
               {group.items.map((item, idx) => (
                 <button
-                  key={item.label}
+                  key={item.id}
                   onClick={item.action}
-                  disabled={item.label === "Privacy" && privacyLoading}
+                  disabled={item.id === "privacy" && privacyLoading}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-white/5 transition-colors disabled:opacity-60 ${idx !== group.items.length - 1 ? "border-b border-white/5" : ""}`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
@@ -324,7 +350,7 @@ export default function AccountSettings() {
         {/* ── Danger Zone ── */}
         <div>
           <h3 className="text-xs text-red-400/60 font-medium uppercase tracking-wider mb-2 px-1">
-            Danger Zone
+            {t("groups.dangerZone")}
           </h3>
           <div className="bg-[#13131f] rounded-2xl border border-white/5 overflow-hidden">
             <button
@@ -334,7 +360,7 @@ export default function AccountSettings() {
               <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                 <LogOut size={16} className="text-red-400" />
               </div>
-              <span className="text-sm text-red-400">Sign Out</span>
+              <span className="text-sm text-red-400">{t("items.signOut")}</span>
             </button>
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -343,7 +369,9 @@ export default function AccountSettings() {
               <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
                 <Trash2 size={16} className="text-red-400" />
               </div>
-              <span className="text-sm text-red-400">Delete Account</span>
+              <span className="text-sm text-red-400">
+                {t("items.deleteAccount")}
+              </span>
             </button>
           </div>
         </div>
@@ -357,11 +385,10 @@ export default function AccountSettings() {
               <Trash2 size={20} className="text-red-400" />
             </div>
             <h3 className="text-sm font-semibold text-center mb-1">
-              Delete Account?
+              {t("deleteModal.title")}
             </h3>
             <p className="text-xs text-gray-500 text-center mb-5">
-              This will permanently delete your account, all your posts, and
-              data. This cannot be undone.
+              {t("deleteModal.description")}
             </p>
             <div className="flex gap-2">
               <button
@@ -369,7 +396,7 @@ export default function AccountSettings() {
                 disabled={deleteLoading}
                 className="flex-1 py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
               >
-                Cancel
+                {t("deleteModal.cancel")}
               </button>
               <button
                 onClick={handleDeleteAccount}
@@ -381,7 +408,7 @@ export default function AccountSettings() {
                 ) : (
                   <Trash2 size={12} />
                 )}
-                Delete
+                {t("deleteModal.confirm")}
               </button>
             </div>
           </div>
@@ -396,7 +423,7 @@ export default function AccountSettings() {
               <Globe size={20} className="text-green-400" />
             </div>
             <h3 className="text-sm font-semibold text-center mb-4">
-              Select Language
+              {t("languageModal.title")}
             </h3>
             <div className="space-y-2 mb-4">
               {LANGUAGES.map((lang) => (
@@ -429,14 +456,16 @@ export default function AccountSettings() {
               onClick={() => setShowLanguageModal(false)}
               className="w-full py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
             >
-              Cancel
+              {t("languageModal.cancel")}
             </button>
           </div>
         </div>
       )}
 
       {/* ── App Version ── */}
-      <p className="text-center text-[10px] text-gray-700 mt-8">Zyft v1.0.0</p>
+      <p className="text-center text-[10px] text-gray-700 mt-8">
+        {t("appVersion")}
+      </p>
     </div>
   );
 }

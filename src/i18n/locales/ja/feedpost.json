@@ -1,0 +1,84 @@
+{
+  "report": {
+    "title": "投稿を報告",
+    "untitledPost": "無題の投稿",
+    "submit": "報告を送信",
+    "reasons": {
+      "spam": "スパムまたは誤解を招く内容",
+      "harassment": "嫌がらせ・いじめ",
+      "inappropriate": "不適切なコンテンツ",
+      "falseInfo": "虚偽の情報",
+      "other": "その他"
+    },
+    "submitted": "報告を送信しました。Zyftの安全にご協力いただきありがとうございます。",
+    "submitFailed": "報告の送信に失敗しました"
+  },
+
+  "imagePreview": {
+    "close": "閉じる"
+  },
+
+  "menu": {
+    "visitProfile": "プロフィールを見る",
+    "saveToFavorites": "お気に入りに保存",
+    "savedToFavorites": "お気に入りに保存済み",
+    "notInterested": "興味なし",
+    "share": "シェア",
+    "editPost": "投稿を編集",
+    "report": "報告",
+    "delete": "削除"
+  },
+
+  "toast": {
+    "followUpdateFailed": "フォロー状態の更新に失敗しました",
+    "respectUpdateFailed": "リスペクトの更新に失敗しました",
+    "savedToFavorites": "お気に入りに保存しました",
+    "removedFromFavorites": "お気に入りから削除しました",
+    "favoritesUpdateFailed": "お気に入りの更新に失敗しました",
+    "postHidden": "投稿をフィードから非表示にしました",
+    "postUnhidden": "投稿がフィードに再表示されます",
+    "preferencesUpdateFailed": "設定の更新に失敗しました",
+    "sharedSuccessfully": "シェアしました",
+    "linkCopied": "リンクをコピーしました！",
+    "shareCancelled": "シェアをキャンセルしました",
+    "commentPostFailed": "コメントの投稿に失敗しました",
+    "commentDeleteFailed": "コメントの削除に失敗しました",
+    "commentUpdateFailed": "コメントの更新に失敗しました",
+    "reactFailed": "リアクションに失敗しました"
+  },
+
+  "post": {
+    "anonymous": "匿名ユーザー",
+    "recently": "最近",
+    "edited": "編集済み",
+    "follow": "フォロー",
+    "following": "フォロー中",
+    "editPlaceholder": "今何を考えていますか？",
+    "charCountSave": "{{count}}/500 · Cmd+Enterで保存",
+    "duration": "時間",
+    "durationUnit": "分",
+    "calories": "カロリー",
+    "exercises": "種目",
+    "hideStats": "詳細を隠す",
+    "viewStats": "詳細を見る",
+    "respects": "リスペクト",
+    "comments": "コメント",
+    "workoutFallback": "ワークアウト"
+  },
+
+  "hidden": {
+    "label": "投稿を非表示にしました",
+    "updating": "更新中...",
+    "undo": "元に戻す"
+  },
+
+  "commentsSection": {
+    "replyingTo": "{{name}}に返信中",
+    "replyPlaceholder": "{{name}}に返信...",
+    "addPlaceholder": "コメントを追加...",
+    "noComments": "まだコメントはありません",
+    "reply": "返信",
+    "saving": "保存中...",
+    "reactAriaLabel": "リアクション"
+  }
+}

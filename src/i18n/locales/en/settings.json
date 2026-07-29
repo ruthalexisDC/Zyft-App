@@ -1,27 +1,53 @@
 {
-  "privacy": "Privacy",
-  "private": "Private",
-  "public": "Public",
-  "notifications": "Notifications",
-  "darkMode": "Dark Mode",
-  "language": "Language",
-  "verificationStatus": "Verification Status",
-  "verified": "Verified",
-  "notVerified": "Not Verified",
-
-  "deleteAccount": "Delete Account",
-  "deleteAccountTitle": "Delete Account?",
-  "deleteAccountBody": "This will permanently delete your account, all your posts, and data. This cannot be undone.",
-
-  "selectLanguage": "Select Language",
-
+  "header": "Settings",
+  "edit": "Edit",
+  "fallbackName": "User",
+  "fallbackHandle": "user",
+  "groups": {
+    "account": "Account",
+    "preferences": "Preferences",
+    "dangerZone": "Danger Zone",
+      "legal": "Legal"
+  },
+  "items": {
+    "privacy": "Privacy",
+    "notifications": "Notifications",
+    "darkMode": "Dark Mode",
+    "language": "Language",
+    "verificationStatus": "Verification Status",
+    "signOut": "Sign Out",
+    "deleteAccount": "Delete Account",    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service"
+  },
+  "values": {
+    "private": "Private",
+    "public": "Public",
+    "on": "On",
+    "off": "Off",
+    "verified": "Verified",
+    "notVerified": "Not Verified",
+    "loading": "..."
+  },
   "toast": {
-    "privacySetToPrivate": "Your account is now private",
-    "privacySetToPublic": "Your account is now public",
-    "privacyUpdateFailed": "Failed to update privacy setting",
+    "loggingOut": "Logging out...",
+    "signedOut": "Signed out successfully",
     "accountDeleted": "Account deleted",
-    "accountDeleteFailed": "Failed to delete account"
+    "deleteFailed": "Failed to delete account",
+    "privacyPrivate": "Your account is now private",
+    "privacyPublic": "Your account is now public",
+    "privacyFailed": "Failed to update privacy setting",
+    "languageChanged": "Language updated"
+  },
+  "deleteModal": {
+    "title": "Delete Account?",
+    "description": "This will permanently delete your account, all your posts, and data. This cannot be undone.",
+    "cancel": "Cancel",
+    "confirm": "Delete"
+  },
+  "languageModal": {
+    "title": "Select Language",
+    "cancel": "Cancel"
   },
 
-  "appVersion": "Zyft v{{version}}"
+    "appVersion": "Zyft v1.0.0"
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   MoreHorizontal,
   Heart,
@@ -49,6 +50,17 @@ import { summarizeSets } from "../utils/exerciseDisplay";
 // Must match REACTION_EMOJIS in the backend Comment model — keep in sync.
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
+// Internal report-reason keys — the VALUE sent to the backend stays a
+// stable English key; only the display label shown to the user is
+// translated via t(`feedpost:report.reasons.${key}`).
+const REPORT_REASON_KEYS = [
+  "spam",
+  "harassment",
+  "inappropriate",
+  "falseInfo",
+  "other",
+];
+
 // ─── Toast ────────────────────────────────────────────────────
 function Toast({ message, type, onClose }) {
   useEffect(() => {
@@ -74,16 +86,9 @@ function Toast({ message, type, onClose }) {
 }
 
 // ─── Report Modal ─────────────────────────────────────────────
-function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
+function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const reasons = [
-    "Spam or misleading",
-    "Harassment or bullying",
-    "Inappropriate content",
-    "False information",
-    "Other",
-  ];
 
   const handleSubmit = async () => {
     if (!reason) return;
@@ -102,7 +107,9 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] px-4">
       <div className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-xs border border-white/10 shadow-xl">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-white">Report Post</h3>
+          <h3 className="text-sm font-semibold text-white">
+            {t("feedpost:report.title")}
+          </h3>
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-white transition-colors"
@@ -111,20 +118,20 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
           </button>
         </div>
         <p className="text-xs text-gray-500 mb-3 line-clamp-1">
-          "{postTitle || "Untitled post"}"
+          "{postTitle || t("feedpost:report.untitledPost")}"
         </p>
         <div className="space-y-1.5 mb-4">
-          {reasons.map((r) => (
+          {REPORT_REASON_KEYS.map((key) => (
             <button
-              key={r}
-              onClick={() => setReason(r)}
+              key={key}
+              onClick={() => setReason(key)}
               className={`w-full text-left px-3 py-2.5 rounded-xl text-xs transition-all ${
-                reason === r
+                reason === key
                   ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
                   : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
               }`}
             >
-              {r}
+              {t(`feedpost:report.reasons.${key}`)}
             </button>
           ))}
         </div>
@@ -133,7 +140,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
             onClick={onClose}
             className="flex-1 py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
           >
-            Cancel
+            {t("common:cancel")}
           </button>
           <button
             onClick={handleSubmit}
@@ -145,7 +152,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
             ) : (
               <Flag size={12} />
             )}
-            Submit Report
+            {t("feedpost:report.submit")}
           </button>
         </div>
       </div>
@@ -154,7 +161,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle }) {
 }
 
 // ─── Image Preview Modal ──────────────────────────────────────
-function ImagePreviewModal({ src, alt, onClose }) {
+function ImagePreviewModal({ src, alt, onClose, t }) {
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === "Escape") onClose();
@@ -173,7 +180,7 @@ function ImagePreviewModal({ src, alt, onClose }) {
       <button
         onClick={onClose}
         className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-colors"
-        title="Close"
+        title={t("feedpost:imagePreview.close")}
       >
         <X size={18} />
       </button>
@@ -188,7 +195,7 @@ function ImagePreviewModal({ src, alt, onClose }) {
 }
 
 // ─── Avatar Component ─────────────────────────────────────────
-function UserAvatar({ user, size = 10 }) {
+function UserAvatar({ user, size = 10, t }) {
   const { isUserOnline } = useSocket();
 
   const sizeClasses = {
@@ -209,7 +216,7 @@ function UserAvatar({ user, size = 10 }) {
         {photo ? (
           <img
             src={photo}
-            alt={user?.name || "User"}
+            alt={user?.name || t("common:userFallback")}
             className="w-full h-full object-cover"
             onError={(e) => {
               e.target.style.display = "none";
@@ -235,6 +242,7 @@ function CommentReactions({
   openPickerId,
   setOpenPickerId,
   handleReactToComment,
+  t,
 }) {
   const reactionSummary = comment.reactionSummary || {};
 
@@ -270,7 +278,7 @@ function CommentReactions({
           }
           disabled={reactingCommentId === comment._id}
           className="text-gray-600 hover:text-purple-400 transition-colors p-0.5 disabled:opacity-50"
-          title="React"
+          title={t("feedpost:commentsSection.reactAriaLabel")}
         >
           <SmilePlus size={13} />
         </button>
@@ -305,6 +313,7 @@ export default function FeedPostCard({
   autoFocusReply = false,
 }) {
   const navigate = useNavigate();
+  const { t } = useTranslation(["feedpost", "common"]);
 
   const [showStats, setShowStats] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -355,7 +364,7 @@ export default function FeedPostCard({
         month: "short",
         day: "numeric",
       })
-    : "Recently";
+    : t("feedpost:post.recently");
 
   const userHandle =
     user.handle ||
@@ -441,59 +450,12 @@ export default function FeedPostCard({
       await followUserById(user._id);
     } catch (err) {
       setFollowing(!next);
-      showToast("Failed to update follow status", "error");
+      showToast(t("feedpost:toast.followUpdateFailed"), "error");
       console.error("Follow error:", err);
     } finally {
       setFollowLoading(false);
     }
   };
-
-  // ── RESPECT ──
-  // const handleRespect = async () => {
-  //   console.log("🔴 RESPECT CLICKED");
-  //   console.log("  respecting:", respecting);
-  //   console.log("  didRespect:", didRespect);
-  //   console.log("  respectCount:", respectCount);
-
-  //   if (respecting) {
-  //     console.log("  ⛔ Already respecting, returning");
-  //     return;
-  //   }
-
-  //   console.log("  ✅ Not blocked, proceeding...");
-  //   setRespecting(true);
-
-  //   const prevDidRespect = didRespect;
-  //   const prevCount = respectCount;
-  //   const nextDidRespect = !prevDidRespect;
-  //   const nextCount = nextDidRespect
-  //     ? prevCount + 1
-  //     : Math.max(0, prevCount - 1);
-
-  //   console.log("  optimistic:", {
-  //     prevDidRespect,
-  //     nextDidRespect,
-  //     prevCount,
-  //     nextCount,
-  //   });
-
-  //   setDidRespect(nextDidRespect);
-  //   setRespectCount(nextCount);
-
-  //   try {
-  //     console.log("  📤 calling onRespect...");
-  //     await onRespect(post._id, prevDidRespect, prevCount);
-  //     console.log("  ✅ onRespect success");
-  //   } catch (err) {
-  //     console.error("  ❌ onRespect failed:", err);
-  //     setDidRespect(prevDidRespect);
-  //     setRespectCount(prevCount);
-  //     showToast("Failed to update respect", "error");
-  //   } finally {
-  //     console.log("  🔄 done");
-  //     setRespecting(false);
-  //   }
-  // };
 
   // ── RESPECT ──
   const handleRespect = async () => {
@@ -502,7 +464,7 @@ export default function FeedPostCard({
     try {
       await onRespect(post._id, post.didRespect, post.respectCount);
     } catch (err) {
-      showToast("Failed to update respect", "error");
+      showToast(t("feedpost:toast.respectUpdateFailed"), "error");
       console.error("Respect error:", err);
     } finally {
       setRespecting(false);
@@ -518,14 +480,14 @@ export default function FeedPostCard({
     try {
       if (newState) {
         await savePost(post._id);
-        showToast("Saved to favorites", "success");
+        showToast(t("feedpost:toast.savedToFavorites"), "success");
       } else {
         await unsavePost(post._id);
-        showToast("Removed from favorites", "info");
+        showToast(t("feedpost:toast.removedFromFavorites"), "info");
       }
     } catch (err) {
       setSaved(!newState);
-      showToast("Failed to update favorites", "error");
+      showToast(t("feedpost:toast.favoritesUpdateFailed"), "error");
       console.error("Save error:", err);
     } finally {
       setSavingFavorite(false);
@@ -542,14 +504,14 @@ export default function FeedPostCard({
     try {
       if (newHidden) {
         await hidePost(post._id);
-        showToast("Post hidden from feed", "info");
+        showToast(t("feedpost:toast.postHidden"), "info");
       } else {
         await unhidePost(post._id);
-        showToast("Post will show in feed", "info");
+        showToast(t("feedpost:toast.postUnhidden"), "info");
       }
     } catch (err) {
       setHidden(!newHidden);
-      showToast("Failed to update preferences", "error");
+      showToast(t("feedpost:toast.preferencesUpdateFailed"), "error");
       console.error("Hide error:", err);
     } finally {
       setHiding(false);
@@ -567,16 +529,16 @@ export default function FeedPostCard({
       if (navigator.share) {
         await navigator.share(shareData);
         trackShare(post._id, "native").catch(() => {});
-        showToast("Shared successfully", "success");
+        showToast(t("feedpost:toast.sharedSuccessfully"), "success");
       } else {
         await navigator.clipboard.writeText(shareData.url);
         trackShare(post._id, "clipboard").catch(() => {});
-        showToast("Link copied to clipboard!", "success");
+        showToast(t("feedpost:toast.linkCopied"), "success");
       }
     } catch (err) {
       if (err.name !== "AbortError") {
         console.error("Share failed:", err);
-        showToast("Share cancelled", "info");
+        showToast(t("feedpost:toast.shareCancelled"), "info");
       }
     }
     setShowMenu(false);
@@ -586,9 +548,9 @@ export default function FeedPostCard({
   const handleReport = async (reason) => {
     try {
       await reportPost(post._id, reason);
-      showToast("Report submitted. Thanks for keeping Zyft safe.", "success");
+      showToast(t("feedpost:report.submitted"), "success");
     } catch (err) {
-      showToast("Failed to submit report", "error");
+      showToast(t("feedpost:report.submitFailed"), "error");
       console.error("Report error:", err);
     }
   };
@@ -643,7 +605,7 @@ export default function FeedPostCard({
       setCommentText("");
       setReplyingTo(null);
     } catch {
-      showToast("Failed to post comment", "error");
+      showToast(t("feedpost:toast.commentPostFailed"), "error");
     } finally {
       setPostingComment(false);
     }
@@ -673,7 +635,7 @@ export default function FeedPostCard({
       );
       if (replyingTo?._id === commentId) setReplyingTo(null);
     } catch {
-      showToast("Failed to delete comment", "error");
+      showToast(t("feedpost:toast.commentDeleteFailed"), "error");
     }
   };
 
@@ -710,7 +672,7 @@ export default function FeedPostCard({
       );
       setEditingCommentId(null);
     } catch {
-      showToast("Failed to update comment", "error");
+      showToast(t("feedpost:toast.commentUpdateFailed"), "error");
     } finally {
       setSavingCommentId(null);
     }
@@ -754,7 +716,7 @@ export default function FeedPostCard({
         }),
       );
     } catch (err) {
-      showToast("Failed to react", "error");
+      showToast(t("feedpost:toast.reactFailed"), "error");
       console.error("React error:", err);
     } finally {
       setReactingCommentId(null);
@@ -780,14 +742,16 @@ export default function FeedPostCard({
       <div className="bg-[#13131f] rounded-2xl p-4 border border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <EyeOff size={16} className="text-gray-500" />
-          <span className="text-xs text-gray-500">Post hidden</span>
+          <span className="text-xs text-gray-500">
+            {t("feedpost:hidden.label")}
+          </span>
         </div>
         <button
           onClick={handleToggleInterest}
           disabled={hiding}
           className="text-xs text-purple-400 hover:text-purple-300 transition-colors disabled:opacity-50"
         >
-          {hiding ? "Updating..." : "Undo"}
+          {hiding ? t("feedpost:hidden.updating") : t("feedpost:hidden.undo")}
         </button>
       </div>
     );
@@ -802,15 +766,17 @@ export default function FeedPostCard({
             to={`/profile/${user._id}`}
             className="flex items-center gap-3 flex-1 min-w-0"
           >
-            <UserAvatar user={user} size={10} />
+            <UserAvatar user={user} size={10} t={t} />
             <div className="min-w-0">
               <h3 className="text-sm font-semibold truncate">
-                {user.name || "Anonymous"}
+                {user.name || t("feedpost:post.anonymous")}
               </h3>
               <p className="text-xs text-gray-500 truncate">
                 @{userHandle} · {timeAgo}
                 {post.updatedAt && post.updatedAt !== post.createdAt && (
-                  <span className="text-gray-600 ml-1">· Edited</span>
+                  <span className="text-gray-600 ml-1">
+                    · {t("feedpost:post.edited")}
+                  </span>
                 )}
               </p>
             </div>
@@ -830,9 +796,9 @@ export default function FeedPostCard({
                 {followLoading ? (
                   <Loader2 size={12} className="animate-spin" />
                 ) : following ? (
-                  "Following"
+                  t("feedpost:post.following")
                 ) : (
-                  "Follow"
+                  t("feedpost:post.follow")
                 )}
               </button>
             )}
@@ -858,7 +824,7 @@ export default function FeedPostCard({
                     <div className="w-4 h-4 rounded-full border-2 border-purple-400 flex items-center justify-center">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                     </div>
-                    Visit profile
+                    {t("feedpost:menu.visitProfile")}
                   </Link>
 
                   <div className="my-1 border-t border-white/5" />
@@ -877,7 +843,9 @@ export default function FeedPostCard({
                       }
                     />
                     <span className={saved ? "text-purple-300" : ""}>
-                      {saved ? "Saved to favorites" : "Save to favorites"}
+                      {saved
+                        ? t("feedpost:menu.savedToFavorites")
+                        : t("feedpost:menu.saveToFavorites")}
                     </span>
                     {savingFavorite && (
                       <Loader2 size={12} className="animate-spin ml-auto" />
@@ -890,7 +858,7 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5 disabled:opacity-50"
                   >
                     <EyeOff size={14} className="text-gray-500" />
-                    Not interested
+                    {t("feedpost:menu.notInterested")}
                     {hiding && (
                       <Loader2 size={12} className="animate-spin ml-auto" />
                     )}
@@ -901,7 +869,7 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5"
                   >
                     <Share2 size={14} className="text-gray-500" />
-                    Share
+                    {t("feedpost:menu.share")}
                   </button>
 
                   <div className="my-1 border-t border-white/5" />
@@ -915,7 +883,7 @@ export default function FeedPostCard({
                       className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5"
                     >
                       <Pencil size={14} className="text-purple-400" />
-                      Edit post
+                      {t("feedpost:menu.editPost")}
                     </button>
                   )}
 
@@ -927,7 +895,7 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
                   >
                     <Flag size={14} />
-                    Report
+                    {t("feedpost:menu.report")}
                   </button>
 
                   {isOwner && (
@@ -939,7 +907,7 @@ export default function FeedPostCard({
                       className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
                     >
                       <Trash2 size={14} />
-                      Delete
+                      {t("feedpost:menu.delete")}
                     </button>
                   )}
                 </div>
@@ -962,12 +930,12 @@ export default function FeedPostCard({
               className="w-full bg-[#0a0a0a] rounded-xl p-3 text-sm text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5 placeholder-gray-600"
               rows={3}
               maxLength={500}
-              placeholder="What's on your mind?"
+              placeholder={t("feedpost:post.editPlaceholder")}
               autoFocus
             />
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-600">
-                {editText.length}/500 · Cmd+Enter to save
+                {t("feedpost:post.charCountSave", { count: editText.length })}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -975,7 +943,7 @@ export default function FeedPostCard({
                   disabled={isSaving}
                   className="px-3 py-1.5 text-xs text-gray-400 hover:text-white transition-colors disabled:opacity-50 rounded-lg hover:bg-white/5"
                 >
-                  Cancel
+                  {t("common:cancel")}
                 </button>
                 <button
                   onClick={handleSaveEdit}
@@ -987,7 +955,7 @@ export default function FeedPostCard({
                   ) : (
                     <Check size={14} />
                   )}{" "}
-                  Save
+                  {t("common:save")}
                 </button>
               </div>
             </div>
@@ -1025,19 +993,25 @@ export default function FeedPostCard({
           <div className="px-4 py-3 flex gap-2">
             {workout.duration != null && (
               <div className="flex-1 py-2 rounded-xl text-center text-xs font-semibold bg-white/5 border border-white/5 text-gray-300">
-                <p className="text-[10px] text-gray-500 mb-0.5">Duration</p>
-                {workout.duration} min
+                <p className="text-[10px] text-gray-500 mb-0.5">
+                  {t("feedpost:post.duration")}
+                </p>
+                {workout.duration} {t("feedpost:post.durationUnit")}
               </div>
             )}
             {workout.caloriesBurned != null && (
               <div className="flex-1 py-2 rounded-xl text-center text-xs font-semibold bg-[#8b5cf6]/20 border border-[#8b5cf6]/30 text-[#a78bfa]">
-                <p className="text-[10px] text-gray-500 mb-0.5">Calories</p>
+                <p className="text-[10px] text-gray-500 mb-0.5">
+                  {t("feedpost:post.calories")}
+                </p>
                 {workout.caloriesBurned}
               </div>
             )}
             {workout.exercises?.length > 0 && (
               <div className="flex-1 py-2 rounded-xl text-center text-xs font-semibold bg-white/5 border border-white/5 text-gray-300">
-                <p className="text-[10px] text-gray-500 mb-0.5">Exercises</p>
+                <p className="text-[10px] text-gray-500 mb-0.5">
+                  {t("feedpost:post.exercises")}
+                </p>
                 {workout.exercises.length}
               </div>
             )}
@@ -1049,7 +1023,7 @@ export default function FeedPostCard({
           <div className="px-4 pb-3">
             <img
               src={workout.imageUrl}
-              alt={workout.title || "Workout"}
+              alt={workout.title || t("feedpost:post.workoutFallback")}
               className="w-full h-56 object-cover rounded-xl cursor-pointer hover:opacity-90 transition-opacity"
               loading="lazy"
               onClick={() => setPreviewOpen(true)}
@@ -1065,7 +1039,9 @@ export default function FeedPostCard({
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-all"
             >
               {showStats ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-              {showStats ? "Hide" : "View"} detailed stats
+              {showStats
+                ? t("feedpost:post.hideStats")
+                : t("feedpost:post.viewStats")}
             </button>
             {showStats && (
               <div className="mt-2 p-3 bg-[#1a1a2e] rounded-xl border border-white/5 text-xs space-y-1.5">
@@ -1101,7 +1077,7 @@ export default function FeedPostCard({
           >
             <Heart size={14} fill={post.didRespect ? "currentColor" : "none"} />
             <span className="font-semibold">{post.respectCount || 0}</span>{" "}
-            <span>Respects</span>
+            <span>{t("feedpost:post.respects")}</span>
           </button>
           <button
             onClick={() => setShowComments((prev) => !prev)}
@@ -1116,7 +1092,7 @@ export default function FeedPostCard({
               fill={showComments ? "currentColor" : "none"}
             />
             <span className="font-semibold">{post.commentCount || 0}</span>{" "}
-            <span>Comments</span>
+            <span>{t("feedpost:post.comments")}</span>
           </button>
         </div>
 
@@ -1127,7 +1103,9 @@ export default function FeedPostCard({
               {replyingTo && (
                 <div className="flex items-center justify-between px-1">
                   <span className="text-[10px] text-purple-400">
-                    Replying to {replyingTo.user?.name}
+                    {t("feedpost:commentsSection.replyingTo", {
+                      name: replyingTo.user?.name,
+                    })}
                   </span>
                   <button
                     onClick={handleCancelReply}
@@ -1146,8 +1124,10 @@ export default function FeedPostCard({
                   onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
                   placeholder={
                     replyingTo
-                      ? `Reply to ${replyingTo.user?.name}...`
-                      : "Add a comment..."
+                      ? t("feedpost:commentsSection.replyPlaceholder", {
+                          name: replyingTo.user?.name,
+                        })
+                      : t("feedpost:commentsSection.addPlaceholder")
                   }
                   className="flex-1 bg-[#0a0a0a] rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5 placeholder-gray-600"
                 />
@@ -1171,7 +1151,7 @@ export default function FeedPostCard({
               </div>
             ) : comments.length === 0 ? (
               <p className="text-xs text-gray-600 text-center py-2">
-                No comments yet
+                {t("feedpost:commentsSection.noComments")}
               </p>
             ) : (
               <div className="space-y-2.5">
@@ -1193,7 +1173,7 @@ export default function FeedPostCard({
                       }`}
                     >
                       <div className="flex gap-2 group">
-                        <UserAvatar user={comment.user} size={7} />
+                        <UserAvatar user={comment.user} size={7} t={t} />
                         <div className="flex-1 min-w-0">
                           {isEditingThisComment ? (
                             <div className="space-y-2">
@@ -1221,14 +1201,14 @@ export default function FeedPostCard({
                                   className="text-[10px] text-purple-400 hover:text-purple-300"
                                 >
                                   {savingCommentId === comment._id
-                                    ? "Saving..."
-                                    : "Save"}
+                                    ? t("feedpost:commentsSection.saving")
+                                    : t("common:save")}
                                 </button>
                                 <button
                                   onClick={handleCancelEditComment}
                                   className="text-[10px] text-gray-500 hover:text-gray-400"
                                 >
-                                  Cancel
+                                  {t("common:cancel")}
                                 </button>
                               </div>
                             </div>
@@ -1237,7 +1217,8 @@ export default function FeedPostCard({
                               <div className="bg-[#0a0a0a] rounded-xl px-3 py-2">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
-                                    {comment.user?.name || "Anonymous"}
+                                    {comment.user?.name ||
+                                      t("feedpost:post.anonymous")}
                                   </p>
                                   {isCommentOwner && (
                                     <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1246,7 +1227,7 @@ export default function FeedPostCard({
                                           handleStartEditComment(comment)
                                         }
                                         className="text-gray-600 hover:text-purple-400 transition-colors"
-                                        title="Edit"
+                                        title={t("common:edit")}
                                       >
                                         <Pencil size={10} />
                                       </button>
@@ -1255,7 +1236,7 @@ export default function FeedPostCard({
                                           handleDeleteComment(comment._id)
                                         }
                                         className="text-gray-600 hover:text-red-400 transition-colors"
-                                        title="Delete"
+                                        title={t("common:delete")}
                                       >
                                         <Trash2 size={10} />
                                       </button>
@@ -1273,6 +1254,7 @@ export default function FeedPostCard({
                                 openPickerId={openPickerId}
                                 setOpenPickerId={setOpenPickerId}
                                 handleReactToComment={handleReactToComment}
+                                t={t}
                               />
 
                               <div className="flex items-center gap-2 mt-0.5 ml-1">
@@ -1286,7 +1268,7 @@ export default function FeedPostCard({
                                   {comment.updatedAt &&
                                     comment.updatedAt !== comment.createdAt && (
                                       <span className="text-gray-700 ml-1">
-                                        · Edited
+                                        · {t("feedpost:post.edited")}
                                       </span>
                                     )}
                                 </p>
@@ -1295,7 +1277,7 @@ export default function FeedPostCard({
                                   className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-purple-400 transition-colors"
                                 >
                                   <Reply size={11} />
-                                  Reply
+                                  {t("feedpost:commentsSection.reply")}
                                 </button>
                               </div>
                             </>
@@ -1324,7 +1306,7 @@ export default function FeedPostCard({
                                     : ""
                                 }`}
                               >
-                                <UserAvatar user={reply.user} size={7} />
+                                <UserAvatar user={reply.user} size={7} t={t} />
                                 <div className="flex-1 min-w-0">
                                   {isEditingThisReply ? (
                                     <div className="space-y-2">
@@ -1354,14 +1336,16 @@ export default function FeedPostCard({
                                           className="text-[10px] text-purple-400 hover:text-purple-300"
                                         >
                                           {savingCommentId === reply._id
-                                            ? "Saving..."
-                                            : "Save"}
+                                            ? t(
+                                                "feedpost:commentsSection.saving",
+                                              )
+                                            : t("common:save")}
                                         </button>
                                         <button
                                           onClick={handleCancelEditComment}
                                           className="text-[10px] text-gray-500 hover:text-gray-400"
                                         >
-                                          Cancel
+                                          {t("common:cancel")}
                                         </button>
                                       </div>
                                     </div>
@@ -1370,7 +1354,8 @@ export default function FeedPostCard({
                                       <div className="bg-[#0a0a0a] rounded-xl px-3 py-2">
                                         <div className="flex items-center justify-between">
                                           <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
-                                            {reply.user?.name || "Anonymous"}
+                                            {reply.user?.name ||
+                                              t("feedpost:post.anonymous")}
                                           </p>
                                           {isReplyOwner && (
                                             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1379,7 +1364,7 @@ export default function FeedPostCard({
                                                   handleStartEditComment(reply)
                                                 }
                                                 className="text-gray-600 hover:text-purple-400 transition-colors"
-                                                title="Edit"
+                                                title={t("common:edit")}
                                               >
                                                 <Pencil size={10} />
                                               </button>
@@ -1388,7 +1373,7 @@ export default function FeedPostCard({
                                                   handleDeleteComment(reply._id)
                                                 }
                                                 className="text-gray-600 hover:text-red-400 transition-colors"
-                                                title="Delete"
+                                                title={t("common:delete")}
                                               >
                                                 <Trash2 size={10} />
                                               </button>
@@ -1408,6 +1393,7 @@ export default function FeedPostCard({
                                         handleReactToComment={
                                           handleReactToComment
                                         }
+                                        t={t}
                                       />
 
                                       <p className="text-[10px] text-gray-600 mt-0.5 ml-1">
@@ -1421,7 +1407,7 @@ export default function FeedPostCard({
                                           reply.updatedAt !==
                                             reply.createdAt && (
                                             <span className="text-gray-700 ml-1">
-                                              · Edited
+                                              · {t("feedpost:post.edited")}
                                             </span>
                                           )}
                                       </p>
@@ -1447,6 +1433,7 @@ export default function FeedPostCard({
         onClose={() => setShowReportModal(false)}
         onSubmit={handleReport}
         postTitle={post.content || workout.title}
+        t={t}
       />
 
       {toast && (
@@ -1460,8 +1447,9 @@ export default function FeedPostCard({
       {previewOpen && (
         <ImagePreviewModal
           src={workout.imageUrl}
-          alt={workout.title || "Workout"}
+          alt={workout.title || t("feedpost:post.workoutFallback")}
           onClose={() => setPreviewOpen(false)}
+          t={t}
         />
       )}
     </>

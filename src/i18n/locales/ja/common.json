@@ -14,7 +14,11 @@
   "nav": {
     "account": "アカウント",
     "preferences": "環境設定",
-    "dangerZone": "危険な操作"
+    "dangerZone": "危険な操作",  
+    "home": "ホーム",
+    "discover": "発見",
+    "activity": "アクティビティ",
+    "profile": "プロフィール"
   },
 
   "toggle": {

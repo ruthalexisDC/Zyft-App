@@ -57,7 +57,10 @@
   "post": {
     "weight": "重量",
     "reps": "レップ数",
-    "duration": "時間"
+    "duration": "時間",
+    "durationUnit": "分",
+    "exercises": "種目数",
+    "calories": "カロリー"
   },
 
   "weeklySummary": {

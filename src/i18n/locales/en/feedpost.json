@@ -1,0 +1,84 @@
+{
+  "report": {
+    "title": "Report Post",
+    "untitledPost": "Untitled post",
+    "submit": "Submit Report",
+    "reasons": {
+      "spam": "Spam or misleading",
+      "harassment": "Harassment or bullying",
+      "inappropriate": "Inappropriate content",
+      "falseInfo": "False information",
+      "other": "Other"
+    },
+    "submitted": "Report submitted. Thanks for keeping Zyft safe.",
+    "submitFailed": "Failed to submit report"
+  },
+
+  "imagePreview": {
+    "close": "Close"
+  },
+
+  "menu": {
+    "visitProfile": "Visit profile",
+    "saveToFavorites": "Save to favorites",
+    "savedToFavorites": "Saved to favorites",
+    "notInterested": "Not interested",
+    "share": "Share",
+    "editPost": "Edit post",
+    "report": "Report",
+    "delete": "Delete"
+  },
+
+  "toast": {
+    "followUpdateFailed": "Failed to update follow status",
+    "respectUpdateFailed": "Failed to update respect",
+    "savedToFavorites": "Saved to favorites",
+    "removedFromFavorites": "Removed from favorites",
+    "favoritesUpdateFailed": "Failed to update favorites",
+    "postHidden": "Post hidden from feed",
+    "postUnhidden": "Post will show in feed",
+    "preferencesUpdateFailed": "Failed to update preferences",
+    "sharedSuccessfully": "Shared successfully",
+    "linkCopied": "Link copied to clipboard!",
+    "shareCancelled": "Share cancelled",
+    "commentPostFailed": "Failed to post comment",
+    "commentDeleteFailed": "Failed to delete comment",
+    "commentUpdateFailed": "Failed to update comment",
+    "reactFailed": "Failed to react"
+  },
+
+  "post": {
+    "anonymous": "Anonymous",
+    "recently": "Recently",
+    "edited": "Edited",
+    "follow": "Follow",
+    "following": "Following",
+    "editPlaceholder": "What's on your mind?",
+    "charCountSave": "{{count}}/500 · Cmd+Enter to save",
+    "duration": "Duration",
+    "durationUnit": "min",
+    "calories": "Calories",
+    "exercises": "Exercises",
+    "hideStats": "Hide detailed stats",
+    "viewStats": "View detailed stats",
+    "respects": "Respects",
+    "comments": "Comments",
+    "workoutFallback": "Workout"
+  },
+
+  "hidden": {
+    "label": "Post hidden",
+    "updating": "Updating...",
+    "undo": "Undo"
+  },
+
+  "commentsSection": {
+    "replyingTo": "Replying to {{name}}",
+    "replyPlaceholder": "Reply to {{name}}...",
+    "addPlaceholder": "Add a comment...",
+    "noComments": "No comments yet",
+    "reply": "Reply",
+    "saving": "Saving...",
+    "reactAriaLabel": "React"
+  }
+}

@@ -1,27 +1,53 @@
 {
-  "privacy": "プライバシー",
-  "private": "非公開",
-  "public": "公開",
-  "notifications": "通知",
-  "darkMode": "ダークモード",
-  "language": "言語",
-  "verificationStatus": "認証ステータス",
-  "verified": "認証済み",
-  "notVerified": "未認証",
-
-  "deleteAccount": "アカウントを削除",
-  "deleteAccountTitle": "アカウントを削除しますか？",
-  "deleteAccountBody": "アカウント、投稿、データはすべて完全に削除されます。この操作は取り消せません。",
-
-  "selectLanguage": "言語を選択",
-
-  "toast": {
-    "privacySetToPrivate": "アカウントを非公開にしました",
-    "privacySetToPublic": "アカウントを公開にしました",
-    "privacyUpdateFailed": "プライバシー設定の更新に失敗しました",
-    "accountDeleted": "アカウントを削除しました",
-    "accountDeleteFailed": "アカウントの削除に失敗しました"
+  "header": "設定",
+  "edit": "編集",
+  "fallbackName": "ユーザー",
+  "fallbackHandle": "user",
+  "groups": {
+    "account": "アカウント",
+    "preferences": "一般設定",
+    "dangerZone": "危険区域",
+     "legal": "規約"
   },
-
-  "appVersion": "Zyft v{{version}}"
+  "items": {
+    "privacy": "プライバシー",
+    "notifications": "通知",
+    "darkMode": "ダークモード",
+    "language": "言語",
+    "verificationStatus": "認証状態",
+    "signOut": "サインアウト",
+    "deleteAccount": "アカウントを削除",
+      "privacyPolicy": "プライバシーポリシー",
+    "termsOfService": "利用規約"
+  },
+  "values": {
+    "private": "非公開",
+    "public": "公開",
+    "on": "オン",
+    "off": "オフ",
+    "verified": "認証済み",
+    "notVerified": "未認証",
+    "loading": "..."
+  },
+  "toast": {
+    "loggingOut": "ログアウト中...",
+    "signedOut": "サインアウトしました",
+    "accountDeleted": "アカウントを削除しました",
+    "deleteFailed": "アカウントの削除に失敗しました",
+    "privacyPrivate": "アカウントを非公開にしました",
+    "privacyPublic": "アカウントを公開にしました",
+    "privacyFailed": "プライバシー設定の更新に失敗しました",
+    "languageChanged": "言語を変更しました"
+  },
+  "deleteModal": {
+    "title": "アカウントを削除しますか？",
+    "description": "アカウント、すべての投稿、データが永久に削除されます。この操作は元に戻せません。",
+    "cancel": "キャンセル",
+    "confirm": "削除"
+  },
+  "languageModal": {
+    "title": "言語を選択",
+    "cancel": "キャンセル"
+  },
+  "appVersion": "Zyft v1.0.0"
 }
