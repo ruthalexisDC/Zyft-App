@@ -14,7 +14,12 @@
 
   "header": {
     "profile": "プロフィール",
-    "othersProfile": "{{name}}のプロフィール"
+    "othersProfile": "{{name}}のプロフィール",
+    "consistency": "継続度",
+    "justStarting": "始めたばかり",
+    "buildingConsistency": "習慣を構築中",
+    "community": "コミュニティ",
+    "connections": "つながり"
   },
 
   "toast": {
@@ -51,7 +56,21 @@
 
   "tabs": {
     "post": "投稿",
-    "stats": "統計"
+    "progress": "進捗"
+  },
+
+  "consistency": {
+    "title": "あなたの継続記録",
+    "sessionsLogged": "記録済みセッション",
+    "weeksActive": "活動週数",
+    "quote": "素晴らしい習慣を築いていますね"
+  },
+
+  "journey": {
+    "title": "あなたの道のり",
+    "description_one": "始めてから{{count}}回のワークアウトを完了しました。これからも続けましょう。",
+    "description_other": "始めてから{{count}}回のワークアウトを完了しました。これからも続けましょう。",
+    "viewProgress": "進捗を見る"
   },
 
   "post": {

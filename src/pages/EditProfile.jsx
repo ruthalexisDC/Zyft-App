@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../context/AuthContext";
 import {
   ArrowLeft,
@@ -12,8 +13,6 @@ import {
   Phone,
   X,
   Link as LinkIcon,
-  Award,
-  BarChart3,
   Loader2,
 } from "lucide-react";
 import { updateProfile, uploadProfilePhoto } from "../api/posts";
@@ -67,24 +66,28 @@ const BIO_MAX_LENGTH = 150;
 const fitnessLevels = [
   {
     value: "Beginner",
+    labelKey: "getting-started",
     color: "text-blue-400",
     bg: "bg-blue-500/10",
     border: "border-blue-500/20",
   },
   {
     value: "Intermediate",
+    labelKey: "building-consistency",
     color: "text-purple-400",
     bg: "bg-purple-500/10",
     border: "border-purple-500/20",
   },
   {
     value: "Advanced",
+    labelKey: "regular",
     color: "text-orange-400",
     bg: "bg-orange-500/10",
     border: "border-orange-500/20",
   },
   {
     value: "Elite",
+    labelKey: "experienced",
     color: "text-yellow-400",
     bg: "bg-yellow-500/10",
     border: "border-yellow-500/20",
@@ -196,6 +199,7 @@ const Toast = memo(({ toast }) => {
 
 // ── Main Component ──
 export default function EditProfile() {
+  const { t } = useTranslation("edit");
   const { user, updateUser } = useAuth();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -230,23 +234,6 @@ export default function EditProfile() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 2000);
   }, []);
-
-  const calculateCompletion = useCallback(() => {
-    const fields = [
-      formData.name?.length > 0,
-      formData.handle?.length > 0,
-      formData.bio?.length > 10,
-      formData.focus?.length > 0,
-      formData.email?.length > 0,
-      formData.phone?.length > 0,
-      !!previewImage,
-      formData.instagram?.length > 0,
-      formData.fitnessLevel !== "Beginner",
-    ];
-    return Math.round((fields.filter(Boolean).length / fields.length) * 100);
-  }, [formData, previewImage]);
-
-  const completion = calculateCompletion();
 
   const handleFocus = useCallback((field) => {
     setActiveField(field);
@@ -298,16 +285,16 @@ export default function EditProfile() {
           avatar: data.avatar,
           photo: data.photo,
         }));
-        showToast("Photo updated!");
+        showToast(t("toast.photoSuccess"));
       } catch (err) {
         console.error("Failed to upload photo:", err);
-        showToast("Failed to upload photo", "error");
+        showToast(t("toast.photoError"), "error");
         setPreviewImage(user?.avatar || user?.photo || null);
       } finally {
         setUploadingPhoto(false);
       }
     },
-    [updateUser, showToast, user],
+    [updateUser, showToast, user, t],
   );
 
   const handleSubmit = useCallback(
@@ -342,19 +329,19 @@ export default function EditProfile() {
         }));
 
         setSavedSuccess(true);
-        showToast("Profile saved!");
+        showToast(t("toast.saveSuccess"));
         setTimeout(() => {
           setSavedSuccess(false);
           navigate("/profile");
         }, 1500);
       } catch (err) {
         console.error("Failed to save profile:", err);
-        showToast("Failed to save profile", "error");
+        showToast(t("toast.saveError"), "error");
       } finally {
         setSaving(false);
       }
     },
-    [formData, navigate, updateUser, showToast],
+    [formData, navigate, updateUser, showToast, t],
   );
 
   const toggleDarkMode = useCallback(() => {
@@ -403,6 +390,7 @@ export default function EditProfile() {
       <div className="flex items-center justify-between mb-6 relative">
         <Link
           to="/profile"
+          aria-label={t("page.backAria")}
           className={`w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-95 ${
             darkMode
               ? "bg-white/5 text-gray-400 hover:text-white hover:bg-white/10"
@@ -417,7 +405,7 @@ export default function EditProfile() {
               darkMode ? "text-white" : "text-gray-900"
             }`}
           >
-            Edit Profile
+            {t("page.title")}
           </h1>
         </div>
         <button
@@ -436,44 +424,6 @@ export default function EditProfile() {
         </button>
       </div>
 
-      {/* ── Profile Completion ── */}
-      <div
-        className={`rounded-2xl p-4 border mb-6 ${
-          darkMode ? "bg-[#13131f] border-white/5" : "bg-white border-gray-200"
-        }`}
-      >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <BarChart3 size={14} className="text-purple-400" />
-            <span className="text-xs font-medium text-gray-500">
-              Profile Completion
-            </span>
-          </div>
-          <span
-            className={`text-xs font-bold ${
-              completion === 100 ? "text-emerald-400" : "text-purple-400"
-            }`}
-          >
-            {completion}%
-          </span>
-        </div>
-        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-700 ${
-              completion === 100
-                ? "bg-gradient-to-r from-emerald-400 to-green-400"
-                : "bg-gradient-to-r from-purple-500 to-fuchsia-500"
-            }`}
-            style={{ width: `${completion}%` }}
-          />
-        </div>
-        {completion === 100 && (
-          <p className="text-[10px] text-emerald-400 mt-2 flex items-center gap-1">
-            <Award size={10} /> Profile complete! You're all set.
-          </p>
-        )}
-      </div>
-
       {/* ── Avatar ── */}
       <div className="flex flex-col items-center mb-10">
         <div className="relative group">
@@ -481,7 +431,7 @@ export default function EditProfile() {
             {previewImage ? (
               <img
                 src={previewImage}
-                alt="Profile"
+                alt={t("avatar.alt")}
                 className="w-full h-full object-cover"
               />
             ) : (
@@ -514,7 +464,7 @@ export default function EditProfile() {
           onClick={handlePhotoClick}
           className="mt-4 text-xs font-medium text-[#8b5cf6] hover:text-[#a78bfa] transition-all"
         >
-          {uploadingPhoto ? "Uploading..." : "Change Photo"}
+          {uploadingPhoto ? t("avatar.uploading") : t("avatar.changePhoto")}
         </button>
       </div>
 
@@ -529,12 +479,12 @@ export default function EditProfile() {
                 darkMode ? "text-purple-400" : "text-purple-600"
               }`}
             >
-              Personal Info
+              {t("sections.personal.heading")}
             </p>
           </div>
 
           <InputWrapper
-            label="Display Name"
+            label={t("fields.name.label")}
             field="name"
             darkMode={darkMode}
             formData={formData}
@@ -548,13 +498,13 @@ export default function EditProfile() {
               onChange={handleChange}
               onFocus={() => handleFocus("name")}
               onBlur={handleBlur}
-              placeholder="Your name"
+              placeholder={t("fields.name.placeholder")}
               className={inputClass}
             />
           </InputWrapper>
 
           <InputWrapper
-            label="Username"
+            label={t("fields.handle.label")}
             field="handle"
             darkMode={darkMode}
             formData={formData}
@@ -572,16 +522,19 @@ export default function EditProfile() {
                 onChange={handleHandleChange}
                 onFocus={() => handleFocus("handle")}
                 onBlur={handleBlur}
-                placeholder="username"
+                placeholder={t("fields.handle.placeholder")}
                 className={`${inputClass} pl-8`}
               />
             </div>
           </InputWrapper>
 
           <InputWrapper
-            label="Bio"
+            label={t("fields.bio.label")}
             field="bio"
-            hint={`${formData.bio.length}/${BIO_MAX_LENGTH} characters`}
+            hint={t("fields.bio.hint", {
+              count: formData.bio.length,
+              max: BIO_MAX_LENGTH,
+            })}
             darkMode={darkMode}
             formData={formData}
             activeField={activeField}
@@ -594,13 +547,15 @@ export default function EditProfile() {
               onFocus={() => handleFocus("bio")}
               onBlur={handleBlur}
               rows={3}
-              placeholder="Tell us about yourself..."
+              placeholder={t("fields.bio.placeholder")}
               className={`${inputClass} resize-none leading-relaxed`}
             />
           </InputWrapper>
 
           <div className="space-y-1.5">
-            <label className={labelClass}>Fitness Level</label>
+            <label className={labelClass}>
+              {t("fields.fitnessLevel.label")}
+            </label>
             <div className="grid grid-cols-4 gap-2">
               {fitnessLevels.map((level) => (
                 <button
@@ -613,17 +568,17 @@ export default function EditProfile() {
                           "border-",
                           "ring-",
                         )}`
-                      : "bg-[#13131f] border-white/5 text-gray-500 hover:text-gray-300"
+                      : "bg-[#13131f] border-white/5 text-gray-500"
                   }`}
                 >
-                  {level.value}
+                  {t(`fields.fitnessLevel.${level.labelKey}`)}
                 </button>
               ))}
             </div>
           </div>
 
           <InputWrapper
-            label="Fitness Focus"
+            label={t("fields.focus.label")}
             field="focus"
             darkMode={darkMode}
             formData={formData}
@@ -637,7 +592,7 @@ export default function EditProfile() {
               onChange={handleChange}
               onFocus={() => handleFocus("focus")}
               onBlur={handleBlur}
-              placeholder="e.g., Strength & running"
+              placeholder={t("fields.focus.placeholder")}
               className={inputClass}
             />
           </InputWrapper>
@@ -652,12 +607,12 @@ export default function EditProfile() {
                 darkMode ? "text-purple-400" : "text-purple-600"
               }`}
             >
-              Contact Info
+              {t("sections.contact.heading")}
             </p>
           </div>
 
           <InputWrapper
-            label="Email"
+            label={t("fields.email.label")}
             field="email"
             darkMode={darkMode}
             formData={formData}
@@ -671,13 +626,13 @@ export default function EditProfile() {
               onChange={handleChange}
               onFocus={() => handleFocus("email")}
               onBlur={handleBlur}
-              placeholder="you@example.com"
+              placeholder={t("fields.email.placeholder")}
               className={inputClass}
             />
           </InputWrapper>
 
           <InputWrapper
-            label="Phone"
+            label={t("fields.phone.label")}
             field="phone"
             darkMode={darkMode}
             formData={formData}
@@ -691,7 +646,7 @@ export default function EditProfile() {
               onChange={handleChange}
               onFocus={() => handleFocus("phone")}
               onBlur={handleBlur}
-              placeholder="+1 234 567 890"
+              placeholder={t("fields.phone.placeholder")}
               className={inputClass}
             />
           </InputWrapper>
@@ -706,12 +661,12 @@ export default function EditProfile() {
                 darkMode ? "text-purple-400" : "text-purple-600"
               }`}
             >
-              Social Links
+              {t("sections.social.heading")}
             </p>
           </div>
 
           <InputWrapper
-            label="Instagram"
+            label={t("fields.instagram.label")}
             field="instagram"
             darkMode={darkMode}
             formData={formData}
@@ -730,14 +685,14 @@ export default function EditProfile() {
                 onChange={handleChange}
                 onFocus={() => handleFocus("instagram")}
                 onBlur={handleBlur}
-                placeholder="@yourhandle"
+                placeholder={t("fields.instagram.placeholder")}
                 className={`${inputClass} pl-10`}
               />
             </div>
           </InputWrapper>
 
           <InputWrapper
-            label="Twitter / X"
+            label={t("fields.twitter.label")}
             field="twitter"
             darkMode={darkMode}
             formData={formData}
@@ -756,14 +711,14 @@ export default function EditProfile() {
                 onChange={handleChange}
                 onFocus={() => handleFocus("twitter")}
                 onBlur={handleBlur}
-                placeholder="@yourhandle"
+                placeholder={t("fields.twitter.placeholder")}
                 className={`${inputClass} pl-10`}
               />
             </div>
           </InputWrapper>
 
           <InputWrapper
-            label="TikTok"
+            label={t("fields.tiktok.label")}
             field="tiktok"
             darkMode={darkMode}
             formData={formData}
@@ -782,7 +737,7 @@ export default function EditProfile() {
                 onChange={handleChange}
                 onFocus={() => handleFocus("tiktok")}
                 onBlur={handleBlur}
-                placeholder="@yourhandle"
+                placeholder={t("fields.tiktok.placeholder")}
                 className={`${inputClass} pl-10`}
               />
             </div>
@@ -804,14 +759,15 @@ export default function EditProfile() {
           >
             {saving ? (
               <>
-                <Loader2 size={18} className="animate-spin" /> Saving...
+                <Loader2 size={18} className="animate-spin" />{" "}
+                {t("buttons.saving")}
               </>
             ) : savedSuccess ? (
               <>
-                <CheckCircle2 size={18} /> Profile Saved!
+                <CheckCircle2 size={18} /> {t("buttons.saved")}
               </>
             ) : (
-              "Save Changes"
+              t("buttons.save")
             )}
           </button>
 
@@ -823,7 +779,7 @@ export default function EditProfile() {
                 : "border-gray-200 text-gray-500 hover:text-gray-900 hover:bg-gray-100"
             }`}
           >
-            Cancel
+            {t("buttons.cancel")}
           </Link>
         </div>
       </form>

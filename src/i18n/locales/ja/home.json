@@ -10,11 +10,16 @@
     "title": "今日のエネルギー",
     "refreshTitle": "統計を更新",
     "setGoalTitle": "タップして今日の目標を設定",
+    "setGoalCta": "目標を設定する",
     "goalProgressTitle": "目標の進捗",
     "goalsSuffix": "目標",
     "thisWeek": "今週",
     "totalCalories": "総消費カロリー",
-    "splitCompliance": "スプリット達成率"
+    "splitCompliance": "スプリット達成率",
+    "zeroWorkouts": "まだワークアウトはありません",
+    "zeroCalories": "ワークアウトを記録すると消費カロリーが表示されます",
+    "noSplitYet": "最初のスプリットを設定しましょう",
+    "noDataMessage": "最初のワークアウトを記録すると、ここにエネルギーが表示されます"
   },
 
   "split": {

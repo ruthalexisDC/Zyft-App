@@ -1,12 +1,6 @@
 {
   "header": "アクティビティ",
 
-  "stats": {
-    "respects": "リスペクト",
-    "comments": "コメント",
-    "followers": "フォロワー"
-  },
-
   "tabs": {
     "all": "すべて",
     "unread": "未読",

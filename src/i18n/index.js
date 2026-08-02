@@ -10,6 +10,7 @@ import enLogworkout from "./locales/en/logworkout.json";
 import enActivity from "./locales/en/activity.json";
 import enFeedpost from "./locales/en/feedpost.json";
 import enLegal from "./locales/en/legal.json";
+import enEdit from "./locales/en/edit.json";
 
 import jaCommon from "./locales/ja/common.json";
 import jaProfile from "./locales/ja/profile.json";
@@ -20,6 +21,7 @@ import jaLogworkout from "./locales/ja/logworkout.json";
 import jaActivity from "./locales/ja/activity.json";
 import jaFeedpost from "./locales/ja/feedpost.json";
 import jaLegal from "./locales/ja/legal.json";
+import jaEdit from "./locales/ja/edit.json";
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -33,6 +35,7 @@ i18n.use(initReactI18next).init({
       activity: enActivity,
       feedpost: enFeedpost,
       legal: enLegal,
+      edit: enEdit
     },
     ja: {
       common: jaCommon,
@@ -44,6 +47,7 @@ i18n.use(initReactI18next).init({
       activity: jaActivity,
       feedpost: jaFeedpost,
       legal: jaLegal,
+      edit: jaEdit
     },
   },
   lng: localStorage.getItem("lang") || "en", // manual switcher, no auto-detect
@@ -58,6 +62,7 @@ i18n.use(initReactI18next).init({
     "activity",
     "feedpost",
     "legal",
+    "edit"
   ],
   defaultNS: "common",
   interpolation: { escapeValue: false }, // React already escapes

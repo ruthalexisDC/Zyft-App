@@ -1,12 +1,6 @@
 {
   "header": "Activity",
 
-  "stats": {
-    "respects": "Respects",
-    "comments": "Comments",
-    "followers": "Followers"
-  },
-
   "tabs": {
     "all": "All",
     "unread": "Unread",

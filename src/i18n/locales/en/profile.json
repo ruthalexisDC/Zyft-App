@@ -14,7 +14,12 @@
 
   "header": {
     "profile": "Profile",
-    "othersProfile": "{{name}}'s Profile"
+    "othersProfile": "{{name}}'s Profile",
+    "consistency": "Consistency",
+    "justStarting": "Just Starting",
+    "buildingConsistency": "Building Consistency",
+    "community": "Community",
+    "connections": "Connections"
   },
 
   "toast": {
@@ -51,7 +56,21 @@
 
   "tabs": {
     "post": "Post",
-    "stats": "Stats"
+    "progress": "Progress"
+  },
+
+  "consistency": {
+    "title": "Your Consistency",
+    "sessionsLogged": "Sessions Logged",
+    "weeksActive": "Weeks Active",
+    "quote": "You're building a solid routine"
+  },
+
+  "journey": {
+    "title": "Your Journey",
+    "description_one": "You've completed {{count}} workout since you started. Keep showing up.",
+    "description_other": "You've completed {{count}} workouts since you started. Keep showing up.",
+    "viewProgress": "View your progress"
   },
 
   "post": {

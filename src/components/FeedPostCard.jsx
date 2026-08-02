@@ -1076,8 +1076,12 @@ export default function FeedPostCard({
             }`}
           >
             <Heart size={14} fill={post.didRespect ? "currentColor" : "none"} />
-            <span className="font-semibold">{post.respectCount || 0}</span>{" "}
-            <span>{t("feedpost:post.respects")}</span>
+            {post.respectCount > 0 && (
+              <>
+                <span className="font-semibold">{post.respectCount}</span>{" "}
+                <span>{t("feedpost:post.respects")}</span>
+              </>
+            )}
           </button>
           <button
             onClick={() => setShowComments((prev) => !prev)}
@@ -1091,8 +1095,12 @@ export default function FeedPostCard({
               size={14}
               fill={showComments ? "currentColor" : "none"}
             />
-            <span className="font-semibold">{post.commentCount || 0}</span>{" "}
-            <span>{t("feedpost:post.comments")}</span>
+            {post.commentCount > 0 && (
+              <>
+                <span className="font-semibold">{post.commentCount}</span>{" "}
+                <span>{t("feedpost:post.comments")}</span>
+              </>
+            )}
           </button>
         </div>
 

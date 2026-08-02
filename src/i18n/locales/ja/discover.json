@@ -15,17 +15,10 @@
 
   "categoriesTitle": "カテゴリー",
 
-  "trending": {
-    "title": "トレンド",
-    "showLess": "折りたたむ",
+  "newThisWeek": {
+    "title": "今週の新着",
     "seeAll": "すべて見る",
-    "noResults": "条件に一致するワークアウトがありません"
-  },
-
-  "recommended": {
-    "title": "おすすめ",
-    "seeAll": "すべて見る",
-    "noResults": "条件に一致するおすすめがありません"
+    "noResults": "今週の新しいワークアウトはありません"
   },
 
   "people": {
@@ -35,7 +28,12 @@
     "workoutsLabel": "ワークアウト",
     "followersLabel": "フォロワー",
     "follow": "フォロー",
-    "following": "フォロー中"
+    "following": "フォロー中",
+    "badges": {
+      "beginnerFriendly": "初心者歓迎",
+      "activeThisWeek": "今週アクティブ",
+      "supportive": "サポーティブ"
+    }
   },
 
   "filterModal": {
@@ -63,9 +61,8 @@
   },
 
   "sortLabels": {
-    "Popular": "人気",
-    "Newest": "新着",
-    "Trending": "トレンド"
+    "Relevant": "関連性",
+    "Recent": "最近"
   },
 
   "durationLabels": {

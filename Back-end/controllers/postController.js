@@ -57,8 +57,18 @@ export const getFeed = async (req, res) => {
     let query = {};
 
     if (type === 'following') {
-      const feedUserIds = [...followingIds, userId.toString()];
-      query = { user: { $in: feedUserIds } };
+      // ── CHANGED: Privacy-first feed. ──
+      // Show ALL of the viewer's own posts (private, followers, public), but
+      // from followed users only `public` + `followers` posts — never `private`.
+      query = {
+        $or: [
+          { user: userId },
+          {
+            user: { $in: followingIds },
+            visibility: { $in: ['public', 'followers'] },
+          },
+        ],
+      };
     } else {
       query = { visibility: 'public' };
     }
@@ -199,7 +209,28 @@ export const getUserPosts = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const posts = await Post.find({ user: userId })
+    // ── CHANGED: Respect post visibility per viewer. ──
+    // - The profile owner sees every post (public, followers, private).
+    // - Followers see `public` + `followers` posts.
+    // - Everyone else sees only `public` posts.
+    const isOwnProfile = currentUserId?.toString() === userId.toString();
+    let visibilityFilter = { visibility: 'public' };
+
+    if (isOwnProfile) {
+      visibilityFilter = {};
+    } else {
+      const profileOwner = await User.findById(userId).select('followers');
+      const viewerFollowsOwner = (profileOwner?.followers ?? []).some(
+        (id) => id.toString() === currentUserId?.toString()
+      );
+      if (viewerFollowsOwner) {
+        visibilityFilter = { visibility: { $in: ['public', 'followers'] } };
+      }
+    }
+
+    const query = { user: userId, ...visibilityFilter };
+
+    const posts = await Post.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
@@ -222,7 +253,7 @@ export const getUserPosts = async (req, res) => {
       })
     );
 
-    const totalPosts = await Post.countDocuments({ user: userId });
+    const totalPosts = await Post.countDocuments(query);
 
     res.json({
       success: true,
@@ -337,14 +368,11 @@ export const deletePost = async (req, res) => {
 // GIVE RESPECT (like)
 // ─────────────────────────────────────────
 export const giveRespect = async (req, res) => {
-  console.log("🟢 BACKEND: giveRespect called");
-  
   try {
     const { postId } = req.params;
     const userId = req.user._id;
 
     const post = await Post.findById(postId);
-    console.log("  post found:", !!post);
 
     if (!post) {
       return res.status(404).json({ message: 'Post not found' });
@@ -358,7 +386,6 @@ export const giveRespect = async (req, res) => {
     const alreadyRespected = post.respects.some(
       (r) => r.toString() === userId.toString()
     );
-    console.log("  alreadyRespected:", alreadyRespected);
 
     let newRespects;
     if (alreadyRespected) {
@@ -369,12 +396,16 @@ export const giveRespect = async (req, res) => {
       newRespects = [...post.respects, userId];
     }
 
-    // Use updateOne to avoid full document validation
+    // TRADEOFF: using updateOne deliberately skips full-document validation
+    // (the `save()` path would reject a partially-invalid doc). This keeps
+    // the write fast and avoids validation errors on existing posts, but it
+    // also means any future required-field additions to the Post schema
+    // will NOT be enforced on this write path. If Post ever gains new
+    // required fields, revisit this to use findByIdAndUpdate + runValidators.
     await Post.updateOne(
       { _id: postId },
       { $set: { respects: newRespects } }
     );
-    console.log("  💾 Updated respects via updateOne");
 
     // Notification logic...
     if (!alreadyRespected && post.user.toString() !== userId.toString()) {
@@ -396,8 +427,8 @@ export const giveRespect = async (req, res) => {
       respectCount: newRespects.length,
     });
   } catch (error) {
-    console.error("  ❌ CRASH in giveRespect:", error);
-    res.status(500).json({ message: 'Failed to give respect', error: error.message });
+    console.error('Give respect error:', error);
+    res.status(500).json({ message: 'Failed to give respect' });
   }
 };
 
@@ -433,7 +464,7 @@ export const getRespects = async (req, res) => {
     res.json({ users });
   } catch (error) {
     console.error('Get respects error:', error);
-    res.status(500).json({ message: 'Failed to fetch respects', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch respects' });
   }
 };
 
@@ -701,7 +732,8 @@ export const savePost = async (req, res) => {
     }
     res.json({ success: true, saved: true });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Save post error:', err);
+    res.status(500).json({ message: 'Failed to save post' });
   }
 };
 
@@ -714,7 +746,8 @@ export const unsavePost = async (req, res) => {
     await user.save();
     res.json({ success: true, saved: false });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Unsave post error:', err);
+    res.status(500).json({ message: 'Failed to unsave post' });
   }
 };
 
@@ -730,7 +763,8 @@ export const hidePost = async (req, res) => {
     }
     res.json({ success: true, hidden: true });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Hide post error:', err);
+    res.status(500).json({ message: 'Failed to hide post' });
   }
 };
 
@@ -743,7 +777,8 @@ export const unhidePost = async (req, res) => {
     await user.save();
     res.json({ success: true, hidden: false });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Unhide post error:', err);
+    res.status(500).json({ message: 'Failed to unhide post' });
   }
 };
 
@@ -763,7 +798,8 @@ export const reportPost = async (req, res) => {
     await report.save();
     res.json({ success: true, message: 'Report submitted successfully' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Report post error:', err);
+    res.status(500).json({ message: 'Failed to submit report' });
   }
 };
 
@@ -778,6 +814,7 @@ export const trackShare = async (req, res) => {
     await post.save();
     res.json({ success: true, shareCount: post.shareCount });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error('Track share error:', err);
+    res.status(500).json({ message: 'Failed to track share' });
   }
 };

@@ -1,0 +1,88 @@
+{
+  "page": {
+    "title": "Edit Profile",
+    "backAria": "Back to profile"
+  },
+  "completion": {
+    "title": "Profile Completion",
+    "completeMessage": "Profile complete! You're all set."
+  },
+  "avatar": {
+    "alt": "Profile",
+    "changePhoto": "Change Photo",
+    "uploading": "Uploading..."
+  },
+  "sections": {
+    "personal": {
+      "heading": "Personal Info"
+    },
+    "contact": {
+      "heading": "Contact Info"
+    },
+    "social": {
+      "heading": "Social Links"
+    }
+  },
+  "fields": {
+    "name": {
+      "label": "Display Name",
+      "placeholder": "Your name"
+    },
+    "handle": {
+      "label": "Username",
+      "placeholder": "username"
+    },
+    "bio": {
+      "label": "Bio",
+      "placeholder": "Tell us about yourself...",
+      "hint": "{{count}}/{{max}} characters"
+    },
+    "fitnessLevel": {
+      "label": "Fitness Level",
+      "beginner": "Beginner",
+      "intermediate": "Intermediate",
+      "advanced": "Advanced",
+      "elite": "Elite",
+      "getting-started": "Getting Started",
+      "building-consistency": "Building Consistency",
+      "regular": "Regular",
+      "experienced": "Experienced"
+    },
+    "focus": {
+      "label": "Fitness Focus",
+      "placeholder": "e.g., Strength & running"
+    },
+    "email": {
+      "label": "Email",
+      "placeholder": "you@example.com"
+    },
+    "phone": {
+      "label": "Phone",
+      "placeholder": "+1 234 567 890"
+    },
+    "instagram": {
+      "label": "Instagram",
+      "placeholder": "@yourhandle"
+    },
+    "twitter": {
+      "label": "Twitter / X",
+      "placeholder": "@yourhandle"
+    },
+    "tiktok": {
+      "label": "TikTok",
+      "placeholder": "@yourhandle"
+    }
+  },
+  "buttons": {
+    "save": "Save Changes",
+    "saving": "Saving...",
+    "saved": "Profile Saved!",
+    "cancel": "Cancel"
+  },
+  "toast": {
+    "photoSuccess": "Photo updated!",
+    "photoError": "Failed to upload photo",
+    "saveSuccess": "Profile saved!",
+    "saveError": "Failed to save profile"
+  }
+}

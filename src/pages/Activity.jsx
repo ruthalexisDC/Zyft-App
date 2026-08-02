@@ -1005,14 +1005,6 @@ export default function Activity() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const stats = {
-    respects: notifications.filter((n) => n.type === "respect").length,
-    comments: notifications.filter(
-      (n) => n.type === "comment" || n.type === "mention",
-    ).length,
-    followers: notifications.filter((n) => n.type === "follow").length,
-  };
-
   const markAllRead = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
@@ -1127,31 +1119,6 @@ export default function Activity() {
           {isUserOnline(myProfile?._id || user?._id) && (
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-[#0a0a0a]" />
           )}
-        </div>
-      </div>
-
-      {/* Compact stats bar */}
-      <div className="flex items-center bg-[#13131f] border border-white/[0.07] rounded-2xl mb-5 overflow-hidden">
-        <div className="flex-1 flex items-center justify-center gap-2 py-2.5 border-r border-white/[0.06]">
-          <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-          <span className="text-sm font-semibold">{stats.respects}</span>
-          <span className="text-[11px] text-gray-500">
-            {t("stats.respects")}
-          </span>
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-2 py-2.5 border-r border-white/[0.06]">
-          <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-          <span className="text-sm font-semibold">{stats.comments}</span>
-          <span className="text-[11px] text-gray-500">
-            {t("stats.comments")}
-          </span>
-        </div>
-        <div className="flex-1 flex items-center justify-center gap-2 py-2.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-          <span className="text-sm font-semibold">{stats.followers}</span>
-          <span className="text-[11px] text-gray-500">
-            {t("stats.followers")}
-          </span>
         </div>
       </div>
 

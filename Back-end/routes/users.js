@@ -6,6 +6,8 @@ import auth from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
 import Workout from "../models/Workout.js";
+import Post from "../models/Post.js";
+import Comment from "../models/Comments.js";
 
 import {
   getUserProfileById,
@@ -513,32 +515,86 @@ router.post("/:handle/unfollow", auth, async (req, res) => {
   }
 });
 
-// GET /api/users — list all users
+// GET /api/users — list all users for the Discover "People Like You" section.
+// Returns real profile data plus supportive, non-competitive badge signals:
+//   🌱 Beginner Friendly  — user's level is Beginner
+//   🔥 Active This Week   — logged a workout/post in the last 7 days
+//   💬 Supportive         — left ≥3 comments (encouragement signal)
 router.get("/", auth, async (req, res) => {
   try {
     const users = await User.find({ _id: { $ne: req.user._id } })
       .limit(10)
-      .select("name handle avatar bio followers following streakCount");
+      .select("name handle avatar bio followers following streakCount focus level lastWorkout");
 
     const currentUserId = req.user._id.toString();
 
-    const shaped = users.map((u) => ({
-      id: u._id,
-      name: u.name,
-      handle: u.handle ? `@${u.handle}` : `@user${u._id.toString().slice(-4)}`,
-      avatar: u.avatar,
-      bio: u.bio || "Fitness enthusiast",
-      streakCount: u.streakCount || 0,
-      followers: u.followers?.length || 0,
-      following: u.following?.length || 0,
-      isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
-      workouts: Math.floor(Math.random() * 200) + 20,
-      initials: u.name?.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U",
-      color: "from-[#8b5cf6] to-[#a78bfa]",
-      focus: "Strength",
-      level: "Intermediate",
-      followersNum: u.followers?.length || 0,
-    }));
+    // ── Compute badge signals in parallel ──
+    const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const userIds = users.map((u) => u._id);
+
+    // Users who logged a workout or shared a post in the last 7 days.
+    const [recentWorkoutUsers, recentPostUsers, supportiveUsers] = await Promise.all([
+      userIds.length
+        ? Workout.distinct("user", {
+            user: { $in: userIds },
+            createdAt: { $gte: oneWeekAgo },
+          })
+        : [],
+      userIds.length
+        ? Post.distinct("user", {
+            user: { $in: userIds },
+            createdAt: { $gte: oneWeekAgo },
+          })
+        : [],
+      userIds.length
+        ? Comment.aggregate([
+            { $match: { user: { $in: userIds } } },
+            { $group: { _id: "$user", count: { $sum: 1 } } },
+            { $match: { count: { $gte: 3 } } },
+            { $project: { _id: 1 } },
+          ])
+        : [],
+    ]);
+
+    const activeUserIds = new Set(
+      [...recentWorkoutUsers, ...recentPostUsers].map((id) => id.toString())
+    );
+    const supportiveUserIdSet = new Set(
+      supportiveUsers.map((row) => row._id.toString())
+    );
+
+    const shaped = users.map((u) => {
+      const badges = [];
+
+      if (u.level === "Beginner") {
+        badges.push("🌱 Beginner Friendly");
+      }
+      if (activeUserIds.has(u._id.toString())) {
+        badges.push("🔥 Active This Week");
+      }
+      if (supportiveUserIdSet.has(u._id.toString())) {
+        badges.push("💬 Supportive");
+      }
+
+      return {
+        id: u._id,
+        name: u.name,
+        handle: u.handle ? `@${u.handle}` : `@user${u._id.toString().slice(-4)}`,
+        avatar: u.avatar,
+        bio: u.bio || "Fitness enthusiast",
+        streakCount: u.streakCount || 0,
+        followers: u.followers?.length || 0,
+        following: u.following?.length || 0,
+        isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
+        workouts: Math.floor(Math.random() * 200) + 20,
+        initials: u.name?.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2) || "U",
+        color: "from-[#8b5cf6] to-[#a78bfa]",
+        focus: u.focus || "Strength",
+        level: u.level || "Intermediate",
+        followersNum: u.followers?.length || 0,
+        badges,
+      };
+    });
 
     res.json({ users: shaped });
   } catch (err) {

@@ -85,9 +85,9 @@ export default function WorkoutPostCard({ post, onRespect, getTimeAgo, t }) {
           }`}
         >
           <Heart size={12} className={post.didRespect ? "fill-current" : ""} />
-          <span className="text-xs font-semibold">
-            {post.respectCount || 0}
-          </span>
+          {post.respectCount > 0 && (
+            <span className="text-xs font-semibold">{post.respectCount}</span>
+          )}
         </button>
 
         {/* Title + date */}

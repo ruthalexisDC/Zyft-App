@@ -15,17 +15,10 @@
 
   "categoriesTitle": "Categories",
 
-  "trending": {
-    "title": "Trending",
-    "showLess": "Show less",
+  "newThisWeek": {
+    "title": "New This Week",
     "seeAll": "See all",
-    "noResults": "No workouts match your filters"
-  },
-
-  "recommended": {
-    "title": "Recommended for you",
-    "seeAll": "See all",
-    "noResults": "No recommendations match your filters"
+    "noResults": "No new workouts this week"
   },
 
   "people": {
@@ -35,7 +28,12 @@
     "workoutsLabel": "Workouts",
     "followersLabel": "Followers",
     "follow": "Follow",
-    "following": "Following"
+    "following": "Following",
+    "badges": {
+      "beginnerFriendly": "Beginner Friendly",
+      "activeThisWeek": "Active This Week",
+      "supportive": "Supportive"
+    }
   },
 
   "filterModal": {
@@ -63,9 +61,8 @@
   },
 
   "sortLabels": {
-    "Popular": "Popular",
-    "Newest": "Newest",
-    "Trending": "Trending"
+    "Relevant": "Relevant",
+    "Recent": "Recent"
   },
 
   "durationLabels": {

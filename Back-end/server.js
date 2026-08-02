@@ -1,14 +1,10 @@
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+// Load env vars FIRST. This module has no exports and no side-effect-free
+// dependencies, so it must be the very first import — every subsequent
+// import (including ./config/passport.js) sees a fully populated
+// process.env thanks to ESM evaluation order.
+import './config/loadEnv.js';
+
 import crypto from 'crypto';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-dotenv.config({ path: join(__dirname, '..', '.env') });
-dotenv.config({ path: join(__dirname, '.env') });
-
 
 console.log('EMAIL_USER loaded:', process.env.EMAIL_USER ? 'yes' : 'MISSING');
 console.log('EMAIL_PASS loaded:', process.env.EMAIL_PASS ? 'yes' : 'MISSING');
@@ -19,7 +15,7 @@ import cors from 'cors';
 import mongoose from 'mongoose';
 mongoose.set('returnDocument', 'after');
 import session from 'express-session';
-import passport from './config/passport.js';
+import passport, { initPassport } from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer } from 'socket.io';
 import helmet from 'helmet';
@@ -43,6 +39,11 @@ console.log('GOOGLE_CLIENT_ID:',   process.env.GOOGLE_CLIENT_ID   ? '✓' : '✗
 console.log('GOOGLE_CLIENT_SECRET:',process.env.GOOGLE_CLIENT_SECRET ? '✓' : '✗ MISSING');
 console.log('SESSION_SECRET:',     process.env.SESSION_SECRET     ? '✓' : '✗ MISSING');
 console.log('MONGODB_URI:',        process.env.MONGODB_URI        ? '✓' : '✗ MISSING');
+
+// OAuth strategies (Google/Facebook) are constructed inside initPassport()
+// so they see fully-loaded env vars — construction order is explicit here
+// rather than implicit in ESM import order.
+initPassport();
 
 const app = express();
 

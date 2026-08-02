@@ -469,7 +469,16 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Dumbbell, Plus, X, Camera, Search } from "lucide-react";
+import {
+  Dumbbell,
+  Plus,
+  X,
+  Camera,
+  Search,
+  Lock,
+  Users,
+  Globe,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import BottomNav from "../components/BottomNav.jsx";
 
@@ -548,6 +557,16 @@ const CATEGORY_VALUES = [
   "Other",
 ];
 
+// Internal data values for the audience selector — NOT translated directly.
+// Display text comes from t(`logworkout:visibilityLabels.${value}`).
+const VISIBILITY_VALUES = ["private", "followers", "community"];
+
+const VISIBILITY_ICON = {
+  private: Lock,
+  followers: Users,
+  community: Globe,
+};
+
 export default function LogWorkout() {
   const navigate = useNavigate();
   const { t } = useTranslation(["logworkout", "common"]);
@@ -558,6 +577,8 @@ export default function LogWorkout() {
     caloriesBurned: "",
     notes: "",
     imageUrl: "",
+    // ── CHANGED: Private by default — the core privacy-first design. ──
+    visibility: "private",
   });
   const [exercises, setExercises] = useState([
     { name: "", sets: "", reps: "", weight: "" },
@@ -697,6 +718,42 @@ export default function LogWorkout() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
+        {/* ── CHANGED: Audience / visibility selector — Private by default. ── */}
+        <div className="bg-[#13131f] rounded-xl border border-white/5 p-4">
+          <label className="block text-xs text-gray-400 mb-1">
+            {t("logworkout:visibility.label")}
+          </label>
+          <p className="text-[10px] text-gray-600 mb-3">
+            {t("logworkout:visibility.description")}
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {VISIBILITY_VALUES.map((val) => {
+              const Icon = VISIBILITY_ICON[val];
+              const isSelected = workoutData.visibility === val;
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() =>
+                    setWorkoutData((prev) => ({ ...prev, visibility: val }))
+                  }
+                  className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-3 text-[11px] font-medium transition-all active:scale-[0.97] ${
+                    isSelected
+                      ? "bg-[#8b5cf6]/10 border-[#8b5cf6]/40 text-white"
+                      : "border-white/5 text-gray-400 hover:border-white/10 hover:text-gray-200"
+                  }`}
+                >
+                  <Icon
+                    size={16}
+                    className={isSelected ? "text-[#a78bfa]" : "text-gray-500"}
+                  />
+                  {t(`logworkout:visibilityLabels.${val}`)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Title */}
         <div>
           <label className="block text-xs text-gray-400 mb-1.5">

@@ -14,6 +14,17 @@
     "notesPlaceholder": "調子はどうでしたか？"
   },
 
+  "visibility": {
+    "label": "誰に公開しますか？",
+    "description": "デフォルトは非公開。共有しない限り、ワークアウトはあなただけのものです。"
+  },
+
+  "visibilityLabels": {
+    "private": "非公開",
+    "followers": "友達",
+    "community": "コミュニティ"
+  },
+
   "exercises": {
     "label": "種目",
     "add": "追加",

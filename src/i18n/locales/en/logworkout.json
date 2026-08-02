@@ -14,6 +14,17 @@
     "notesPlaceholder": "How did it feel?"
   },
 
+  "visibility": {
+    "label": "Who can see this?",
+    "description": "Private by default. Your workouts stay yours unless you share them."
+  },
+
+  "visibilityLabels": {
+    "private": "Private",
+    "followers": "Friends",
+    "community": "Community"
+  },
+
   "exercises": {
     "label": "Exercises",
     "add": "Add",

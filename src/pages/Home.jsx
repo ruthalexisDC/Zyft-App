@@ -1154,6 +1154,22 @@ export default function Home() {
     [stats],
   );
 
+  // ── CHANGED: Zero-state detection for novice users ──
+  // When the user has no logged data yet, don't show demotivating "0"/"0%"
+  // values. Instead, show encouraging placeholder text/values.
+  const hasWorkoutData = useMemo(
+    () =>
+      todayStats.workouts > 0 ||
+      todayStats.calories > 0 ||
+      todayStats.consistency > 0,
+    [todayStats.workouts, todayStats.calories, todayStats.consistency],
+  );
+
+  const hasSplitConfigured = useMemo(
+    () => userSplit.some((day) => day && day !== "Rest"),
+    [userSplit],
+  );
+
   const goalProgress = useMemo(() => {
     if (!todayStats.totalGoals) return 0;
     return Math.min(
@@ -1247,8 +1263,9 @@ export default function Home() {
                   todayStats.totalGoals ? "text-gray-500" : "text-gray-600"
                 }
               />
-              {todayStats.goalsCompleted}/{todayStats.totalGoals || "—"}{" "}
-              {t("home:energy.goalsSuffix")}
+              {todayStats.totalGoals
+                ? `${todayStats.goalsCompleted}/${todayStats.totalGoals} ${t("home:energy.goalsSuffix")}`
+                : t("home:energy.setGoalCta")}
             </button>
           </div>
         </div>
@@ -1271,7 +1288,11 @@ export default function Home() {
               <div className="w-7 h-7 rounded-full bg-[#8b5cf6]/20 flex items-center justify-center">
                 <Target size={14} className="text-purple-400" />
               </div>
-              <span className="text-lg font-bold">{todayStats.workouts}</span>
+              <span
+                className={`text-lg font-bold ${hasWorkoutData ? "" : "text-gray-600"}`}
+              >
+                {hasWorkoutData ? todayStats.workouts : "—"}
+              </span>
               <span className="text-[10px] text-gray-500">
                 {t("home:energy.thisWeek")}
               </span>
@@ -1281,7 +1302,11 @@ export default function Home() {
               <div className="w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center">
                 <Zap size={14} className="text-yellow-400" />
               </div>
-              <span className="text-lg font-bold">{todayStats.calories}</span>
+              <span
+                className={`text-lg font-bold ${hasWorkoutData ? "" : "text-gray-600"}`}
+              >
+                {hasWorkoutData ? todayStats.calories : "—"}
+              </span>
               <span className="text-[10px] text-gray-500">
                 {t("home:energy.totalCalories")}
               </span>
@@ -1294,17 +1319,29 @@ export default function Home() {
               <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center">
                 <Flame size={14} className="text-blue-400" />
               </div>
-              <span className="text-lg font-bold">
-                {todayStats.consistency ?? 0}%
+              <span
+                className={`text-lg font-bold ${hasWorkoutData && hasSplitConfigured ? "" : "text-gray-600"}`}
+              >
+                {hasWorkoutData && hasSplitConfigured
+                  ? `${todayStats.consistency ?? 0}%`
+                  : "—"}
               </span>
-              <span className="text-[10px] text-gray-500">
-                {t("home:energy.splitCompliance")}
+              <span className="text-[10px] text-gray-500 leading-tight text-center">
+                {hasSplitConfigured
+                  ? t("home:energy.splitCompliance")
+                  : t("home:energy.noSplitYet")}
               </span>
               <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <CalendarDays size={10} className="text-blue-400" />
               </div>
             </button>
           </div>
+        )}
+
+        {!statsLoading && !hasWorkoutData && (
+          <p className="text-[11px] text-gray-500 mt-3 text-center">
+            {t("home:energy.noDataMessage")}
+          </p>
         )}
 
         {!splitLoading && (

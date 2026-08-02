@@ -1,0 +1,88 @@
+{
+  "page": {
+    "title": "プロフィール編集",
+    "backAria": "プロフィールに戻る"
+  },
+  "completion": {
+    "title": "プロフィール完成度",
+    "completeMessage": "プロフィール完成！準備万端です。"
+  },
+  "avatar": {
+    "alt": "プロフィール",
+    "changePhoto": "写真を変更",
+    "uploading": "アップロード中..."
+  },
+  "sections": {
+    "personal": {
+      "heading": "基本情報"
+    },
+    "contact": {
+      "heading": "連絡先情報"
+    },
+    "social": {
+      "heading": "ソーシャルリンク"
+    }
+  },
+  "fields": {
+    "name": {
+      "label": "表示名",
+      "placeholder": "お名前"
+    },
+    "handle": {
+      "label": "ユーザー名",
+      "placeholder": "username"
+    },
+    "bio": {
+      "label": "自己紹介",
+      "placeholder": "自分自身について教えてください...",
+      "hint": "{{count}}/{{max}}文字"
+    },
+    "fitnessLevel": {
+      "label": "フィットネスレベル",
+      "beginner": "初心者",
+      "intermediate": "中級者",
+      "advanced": "上級者",
+      "elite": "エリート",
+      "getting-started": "はじめよう",
+      "building-consistency": "継続を目指す",
+      "regular": "定期的",
+      "experienced": "経験豊富"
+    },
+    "focus": {
+      "label": "フィットネスの重点",
+      "placeholder": "例：筋トレ＆ランニング"
+    },
+    "email": {
+      "label": "メールアドレス",
+      "placeholder": "you@example.com"
+    },
+    "phone": {
+      "label": "電話番号",
+      "placeholder": "+81 90 1234 5678"
+    },
+    "instagram": {
+      "label": "Instagram",
+      "placeholder": "@yourhandle"
+    },
+    "twitter": {
+      "label": "Twitter / X",
+      "placeholder": "@yourhandle"
+    },
+    "tiktok": {
+      "label": "TikTok",
+      "placeholder": "@yourhandle"
+    }
+  },
+  "buttons": {
+    "save": "変更を保存",
+    "saving": "保存中...",
+    "saved": "プロフィールを保存しました！",
+    "cancel": "キャンセル"
+  },
+  "toast": {
+    "photoSuccess": "写真を更新しました！",
+    "photoError": "写真のアップロードに失敗しました",
+    "saveSuccess": "プロフィールを保存しました！",
+    "saveError": "プロフィールの保存に失敗しました"
+  }
+}

@@ -76,6 +76,19 @@ export const createWorkout = async (req, res) => {
   try {
     const exercises = (req.body.exercises || []).map(expandExercise);
 
+    // ── CHANGED: Privacy-first — workouts are private by default. ──
+    // The Log Workout form sends `visibility` ∈ {private, followers, community}.
+    // `community` maps to the Post schema's `public` enum value (same audience).
+    // Legacy clients that send only `isPublic: true` are preserved as public;
+    // anything else falls back to private instead of the old public default.
+    const rawVisibility = String(req.body.visibility || '').toLowerCase();
+    const isLegacyPublic = req.body.isPublic === true;
+    const visibility = ['private', 'followers', 'public', 'community'].includes(rawVisibility)
+      ? rawVisibility
+      : isLegacyPublic
+        ? 'public'
+        : 'private';
+
     // 1. Create the workout
     const workoutData = {
       user: req.user._id,
@@ -84,7 +97,7 @@ export const createWorkout = async (req, res) => {
       duration: req.body.duration,
       exercises,
       imageUrl: req.body.imageUrl || '',
-      isPublic: req.body.isPublic ?? true,
+      isPublic: visibility === 'public' || visibility === 'community',
       caloriesBurned: req.body.caloriesBurned || 0,
     };
 
@@ -94,7 +107,7 @@ export const createWorkout = async (req, res) => {
     const post = await Post.create({
       user: req.user._id,
       content: req.body.notes || `Just crushed ${req.body.title}! 💪`,
-      visibility: req.body.isPublic !== false ? 'public' : 'private',
+      visibility: visibility === 'community' ? 'public' : visibility,
       workout: {
         workoutId: workout._id,
         title: req.body.title,

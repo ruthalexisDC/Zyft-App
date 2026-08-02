@@ -9,11 +9,16 @@
     "title": "Today's Energy",
     "refreshTitle": "Refresh stats",
     "setGoalTitle": "Tap to set daily goal",
+    "setGoalCta": "Set a goal",
     "goalProgressTitle": "Goal progress",
     "goalsSuffix": "goals",
     "thisWeek": "This Week",
     "totalCalories": "Total Calories",
-    "splitCompliance": "Split Compliance"
+    "splitCompliance": "Split Compliance",
+    "zeroWorkouts": "No workouts yet",
+    "zeroCalories": "Log a workout to see energy burned",
+    "noSplitYet": "Set your first split",
+    "noDataMessage": "Log your first workout and your energy will show here"
   },
   "split": {
     "title": "This Week's Split",
