@@ -61,6 +61,38 @@ router.get("/me", auth, async (req, res) => {
   }
 });
 
+// POST /api/users/heartbeat — client sends this every ~30s while the app
+// is in the foreground to keep last_active_at fresh. Used for computing
+// "Active now" / "Active X ago" status shown to other users.
+router.post("/heartbeat", auth, async (req, res) => {
+  try {
+    const now = new Date();
+    await User.findByIdAndUpdate(req.user._id, { last_active_at: now });
+    res.json({ ok: true, lastActiveAt: now.toISOString() });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PATCH /api/users/active-status — toggle whether this user's active
+// status is visible to others (show_active_status). Default true.
+router.patch("/active-status", auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    user.show_active_status =
+      typeof req.body.showActiveStatus === "boolean"
+        ? req.body.showActiveStatus
+        : !user.show_active_status;
+    await user.save();
+
+    res.json({ showActiveStatus: user.show_active_status });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
 // PATCH /api/users/goal
 router.patch("/goal", auth, setUserGoal);
 

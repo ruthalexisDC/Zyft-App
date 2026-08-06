@@ -3626,8 +3626,6 @@ export default function Discover() {
           </div>
         </>
       )}
-
-      <BottomNav />
     </div>
   );
 }

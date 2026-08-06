@@ -12,6 +12,9 @@
     "setGoalCta": "Set a goal",
     "goalProgressTitle": "Goal progress",
     "goalsSuffix": "goals",
+    "goalSet_one": "{{count}} goal set",
+    "goalSet_other": "{{count}} goals set",
+    "restDayGoal": "Rest day — goal starts tomorrow",
     "thisWeek": "This Week",
     "totalCalories": "Total Calories",
     "splitCompliance": "Split Compliance",
@@ -26,13 +29,30 @@
     "rest": "Rest"
   },
   "days": {
-    "mon": "Mon", "tue": "Tue", "wed": "Wed", "thu": "Thu", "fri": "Fri", "sat": "Sat", "sun": "Sun"
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat",
+    "sun": "Sun"
   },
-  "quickActions": {
-    "readyPrompt": "Ready?",
-    "logWorkout": "Log Workout",
-    "checkPrompt": "Check",
-    "myGoals": "My Goals"
+  "todayPlan": {
+    "eyebrow": "Today",
+    "restDay": "Rest day",
+    "restDayMessage": "Take it easy and recover. You've earned it.",
+    "exerciseCount": "{{count}} exercises",
+    "exerciseCount_one": "{{count}} exercise",
+    "estDuration": "est. {{count}} min",
+    "streak": "{{count}} day streak",
+    "streak_one": "{{count}} day streak",
+    "tapHint": "tap + below to log this session",
+    "noPlan": "No plan for today",
+    "setUpSplit": "Set up your weekly split to see today's workout here.",
+    "setUpCta": "Set up split",
+    "previewTitle": "Today's Plan",
+    "noExercises": "No exercises planned for this session yet.",
+    "notLogged": "Not logged yet"
   },
   "feed": {
     "following": "Following",
@@ -40,7 +60,10 @@
     "notFollowingAnyone": "You're not following anyone yet.",
     "discoverInCommunity": "Discover people in the Community feed →",
     "noPosts": "No posts yet. Be the first to share a workout!",
-    "loadMore": "Load more posts"
+    "loadMore": "Load more posts",
+    "findYourPartners": "Find your training partners",
+    "findPartnersDesc": "Follow people with similar goals to see their workouts here.",
+    "discoverPeople": "Discover people"
   },
   "goalModal": {
     "title": "Set Daily Goal",

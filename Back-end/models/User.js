@@ -41,6 +41,8 @@ const userSchema = new mongoose.Schema(
     // Presence
     isOnline:          { type: Boolean, default: false },
     lastSeen:          { type: Date },
+    last_active_at:    { type: Date },
+    show_active_status:{ type: Boolean, default: true },
 
     // Notification preferences
     notificationPreferences: {

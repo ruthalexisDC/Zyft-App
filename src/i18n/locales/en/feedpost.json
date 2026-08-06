@@ -47,6 +47,13 @@
     "reactFailed": "Failed to react"
   },
 
+  "active": {
+    "justNow": "Active just now",
+    "minutes": "Active {{count}}m ago",
+    "hours": "Active {{count}}h ago",
+    "days": "Active {{count}}d ago"
+  },
+
   "post": {
     "anonymous": "Anonymous",
     "recently": "Recently",

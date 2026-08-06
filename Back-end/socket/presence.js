@@ -55,7 +55,7 @@ export function registerPresenceHandlers(io) {
     // A second tab/device for the same user shouldn't re-announce "online".
     if (isFirstConnectionForUser) {
       try {
-        await User.findByIdAndUpdate(userId, { isOnline: true });
+        await User.findByIdAndUpdate(userId, { isOnline: true, last_active_at: new Date() });
       } catch (err) {
         console.error('Presence: failed to mark user online:', err.message);
       }
@@ -65,6 +65,22 @@ export function registerPresenceHandlers(io) {
     // Tell the newly-connected client who's already online, so it doesn't
     // have to wait for individual presence:online events to build the list.
     socket.emit('presence:snapshot', { onlineUserIds: getOnlineUserIds() });
+
+    // ── Heartbeat ──────────────────────────────────────────────────────
+    // Client sends this every ~30s while the app is in the foreground.
+    // Updates last_active_at so other users can compute "Active X ago"
+    // even after the user goes offline. Persisted to the DB so it survives
+    // reloads / server restarts.
+    socket.on('presence:heartbeat', async () => {
+      const now = new Date();
+      try {
+        await User.findByIdAndUpdate(userId, { last_active_at: now });
+        // Broadcast to everyone so live "Active now" indicators update.
+        io.emit('presence:active', { userId, lastActiveAt: now.toISOString() });
+      } catch (err) {
+        console.error('Presence: failed to update last_active_at:', err.message);
+      }
+    });
 
     socket.on('disconnect', async () => {
       const sockets = onlineUsers.get(userId);
@@ -78,7 +94,7 @@ export function registerPresenceHandlers(io) {
       onlineUsers.delete(userId);
       const lastSeen = new Date();
       try {
-        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen });
+        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen, last_active_at: lastSeen });
       } catch (err) {
         console.error('Presence: failed to mark user offline:', err.message);
       }
@@ -114,7 +130,7 @@ export function registerPresenceHandlers(io) {
         onlineUsers.delete(userId);
         const lastSeen = new Date();
         try {
-          await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen });
+          await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen, last_active_at: lastSeen });
         } catch (err) {
           console.error('Presence reconcile: failed to mark user offline:', err.message);
         }

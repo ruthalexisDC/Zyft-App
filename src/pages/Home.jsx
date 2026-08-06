@@ -765,6 +765,7 @@ import {
   Zap,
   Flame,
   CalendarDays,
+  Users,
 } from "lucide-react";
 import { getPosts, updatePost, deletePost, respectPost } from "../api/posts";
 import { getUserStats, updateUserGoal } from "../api/stats";
@@ -886,6 +887,7 @@ export default function Home() {
   const [newGoalInput, setNewGoalInput] = useState("");
 
   const [showSplitModal, setShowSplitModal] = useState(false);
+  const [showPlanPreview, setShowPlanPreview] = useState(false);
   const [userSplit, setUserSplit] = useState(Array(7).fill("Rest"));
   const [splitLoading, setSplitLoading] = useState(false);
   const { isUserOnline } = useSocket();
@@ -1264,7 +1266,9 @@ export default function Home() {
                 }
               />
               {todayStats.totalGoals
-                ? `${todayStats.goalsCompleted}/${todayStats.totalGoals} ${t("home:energy.goalsSuffix")}`
+                ? todayLabel === "Rest"
+                  ? t("home:energy.restDayGoal")
+                  : t("home:energy.goalSet", { count: todayStats.totalGoals })
                 : t("home:energy.setGoalCta")}
             </button>
           </div>
@@ -1409,41 +1413,121 @@ export default function Home() {
         )}
       </div>
 
-      {/* ── Quick Actions ── */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <Link
-          to="/log"
-          className="bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] rounded-2xl p-4 flex items-center gap-3 hover:opacity-90 active:scale-[0.98] transition-all"
-        >
-          <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-            <Dumbbell size={18} className="text-white" />
+      {/* ── Today's Plan Card ── */}
+      <div className="mb-6">
+        {!hasSplitConfigured ? (
+          /* ── Empty state: no split configured — invite to set up ── */
+          <div className="bg-[#13131f] rounded-2xl p-4 border border-white/5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                <Dumbbell size={18} className="text-purple-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+                  {t("home:todayPlan.eyebrow")}
+                </p>
+                <p className="text-sm font-semibold text-white">
+                  {t("home:todayPlan.noPlan")}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  {t("home:todayPlan.setUpSplit")}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSplitModal(true)}
+                className="text-xs px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold hover:bg-purple-500/25 transition-colors shrink-0"
+              >
+                {t("home:todayPlan.setUpCta")}
+              </button>
+            </div>
           </div>
-          <div>
-            <p className="text-xs text-purple-200">
-              {t("home:quickActions.readyPrompt")}
+        ) : todayLabel === "Rest" ? (
+          /* ── Rest day: simplified card ── */
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setShowPlanPreview(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setShowPlanPreview(true);
+              }
+            }}
+            className="bg-[#13131f] rounded-2xl p-4 border border-white/5 hover:border-white/10 active:scale-[0.99] transition-all cursor-pointer"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+                  {t("home:todayPlan.eyebrow")}
+                </p>
+                <h3 className="text-base font-bold text-white">
+                  {t("home:todayPlan.restDay")}
+                </h3>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+                <Dumbbell size={16} className="text-gray-400" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 leading-relaxed">
+              {t("home:todayPlan.restDayMessage")}
             </p>
-            <p className="text-sm font-semibold text-white">
-              {t("home:quickActions.logWorkout")}
-            </p>
+            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Flame size={14} className="text-orange-400" />
+                <span className="text-xs text-gray-400">
+                  {t("home:todayPlan.streak", {
+                    count: currentUser?.streakCount || 0,
+                  })}
+                </span>
+              </div>
+              <span className="text-[11px] text-gray-500">
+                {t("home:todayPlan.tapHint")}
+              </span>
+            </div>
           </div>
-        </Link>
-
-        <Link
-          to="/activity"
-          className="bg-[#13131f] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:border-white/10 active:scale-[0.98] transition-all"
-        >
-          <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-            <Target size={18} className="text-purple-400" />
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">
-              {t("home:quickActions.checkPrompt")}
+        ) : (
+          /* ── Active day: full "Today's plan" card ── */
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setShowPlanPreview(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setShowPlanPreview(true);
+              }
+            }}
+            className="bg-[#13131f] rounded-2xl p-4 border border-white/5 hover:border-white/10 active:scale-[0.99] transition-all cursor-pointer"
+          >
+            <div className="flex items-start justify-between mb-2">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+                  {t("home:todayPlan.eyebrow")}
+                </p>
+                <h3 className="text-base font-bold text-white">{todayLabel}</h3>
+              </div>
+              <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                <Dumbbell size={16} className="text-purple-400" />
+              </div>
+            </div>
+            <p className="text-xs text-gray-400">
+              {t("home:todayPlan.notLogged")}
             </p>
-            <p className="text-sm font-semibold text-white">
-              {t("home:quickActions.myGoals")}
-            </p>
+            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Flame size={14} className="text-orange-400" />
+                <span className="text-xs text-gray-400">
+                  {t("home:todayPlan.streak", {
+                    count: currentUser?.streakCount || 0,
+                  })}
+                </span>
+              </div>
+              <span className="text-[11px] text-gray-500">
+                {t("home:todayPlan.tapHint")}
+              </span>
+            </div>
           </div>
-        </Link>
+        )}
       </div>
 
       {/* ── Feed Header with Following/Community tabs ── */}
@@ -1481,21 +1565,29 @@ export default function Home() {
       ) : error ? (
         <div className="text-center py-10 text-red-400 text-sm">{error}</div>
       ) : posts.length === 0 ? (
-        <div className="text-center py-10 text-gray-500 text-sm">
-          {feedType === "following" ? (
-            <>
-              <p className="mb-3">{t("home:feed.notFollowingAnyone")}</p>
-              <button
-                onClick={() => setFeedType("community")}
-                className="text-purple-400 hover:text-purple-300 text-xs font-semibold"
-              >
-                {t("home:feed.discoverInCommunity")}
-              </button>
-            </>
-          ) : (
-            t("home:feed.noPosts")
-          )}
-        </div>
+        feedType === "following" ? (
+          <div className="bg-[#13131f] border border-white/5 rounded-2xl px-6 py-10 text-center">
+            <div className="w-14 h-14 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4">
+              <Users size={26} className="text-purple-400" />
+            </div>
+            <h3 className="text-sm font-semibold text-gray-300 mb-1.5">
+              {t("home:feed.findYourPartners")}
+            </h3>
+            <p className="text-xs text-gray-500 leading-relaxed mb-5 max-w-[240px] mx-auto">
+              {t("home:feed.findPartnersDesc")}
+            </p>
+            <Link
+              to="/discover"
+              className="inline-block px-5 py-2.5 rounded-full border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/10 transition-colors"
+            >
+              {t("home:feed.discoverPeople")}
+            </Link>
+          </div>
+        ) : (
+          <div className="text-center py-10 text-gray-500 text-sm">
+            {t("home:feed.noPosts")}
+          </div>
+        )
       ) : (
         <div className="space-y-4">
           {posts.map((post) => (
@@ -1555,6 +1647,66 @@ export default function Home() {
               >
                 {t("home:goalModal.setGoal")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Today's Plan Preview (read-only) ── */}
+      {showPlanPreview && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+          onClick={() => setShowPlanPreview(false)}
+        >
+          <div
+            className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-sm border border-white/10 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+                  {t("home:todayPlan.eyebrow")}
+                </p>
+                <h3 className="text-lg font-bold text-white">
+                  {todayLabel === "Rest"
+                    ? t("home:todayPlan.restDay")
+                    : todayLabel}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowPlanPreview(false)}
+                className="text-gray-400 hover:text-white transition-colors text-xl leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+
+            {todayLabel === "Rest" ? (
+              <p className="text-sm text-gray-400 leading-relaxed">
+                {t("home:todayPlan.restDayMessage")}
+              </p>
+            ) : (
+              <div className="flex items-center justify-center gap-2 py-6 text-gray-500">
+                <Dumbbell size={20} className="text-purple-400" />
+                <span className="text-sm">
+                  {t("home:todayPlan.noExercises")}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Flame size={14} className="text-orange-400" />
+                <span className="text-xs text-gray-400">
+                  {t("home:todayPlan.streak", {
+                    count: currentUser?.streakCount || 0,
+                  })}
+                </span>
+              </div>
+              <span className="text-[11px] text-gray-500">
+                {t("home:todayPlan.tapHint")}
+              </span>
             </div>
           </div>
         </div>

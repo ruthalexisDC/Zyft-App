@@ -15,6 +15,15 @@ export const getUserProfileById = async (req, res) => {
     const postCount = await Post.countDocuments({ user: user._id });
     const isFollowing = user.followers.includes(req.user._id);
 
+    // ── Active status (respects reciprocity) ──
+    // If the profile owner has disabled "show active status", hide it.
+    // Also hide it if the VIEWING user has disabled "show active status"
+    // (reciprocity — like WhatsApp: if you turn it off, you can't see it).
+    const currentUser = await User.findById(req.user._id).select('show_active_status');
+    const showActiveStatus =
+      user.show_active_status !== false &&
+      currentUser?.show_active_status !== false;
+
     res.json({
       success: true,
       user: {
@@ -32,6 +41,10 @@ export const getUserProfileById = async (req, res) => {
         followingCount: user.following.length,
         postCount: postCount,
         isFollowing,
+        // Active status fields
+        show_active_status: user.show_active_status,
+        last_active_at: showActiveStatus ? user.last_active_at : null,
+        isOnline: showActiveStatus ? user.isOnline : false,
       },
     });
   } catch (error) {

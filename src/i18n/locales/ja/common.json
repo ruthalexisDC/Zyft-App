@@ -24,5 +24,14 @@
   "toggle": {
     "on": "オン",
     "off": "オフ"
+  },
+
+  "activeStatus": {
+    "activeNow": "オンライン中",
+    "activeMinutesAgo": "{{count}}分前までオンライン",
+    "activeHoursAgo": "{{count}}時間前までオンライン",
+    "activeDaysAgo": "{{count}}日前までオンライン",
+    "showActiveStatus": "アクティブ状態を表示",
+    "showActiveStatusDesc": "アクティブなときに他のユーザーに知らせる"
   }
 }

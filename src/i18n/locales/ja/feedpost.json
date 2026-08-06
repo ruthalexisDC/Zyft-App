@@ -47,6 +47,13 @@
     "reactFailed": "リアクションに失敗しました"
   },
 
+  "active": {
+    "justNow": "アクティブ",
+    "minutes": "{{count}}分前にアクティブ",
+    "hours": "{{count}}時間前にアクティブ",
+    "days": "{{count}}日前にアクティブ"
+  },
+
   "post": {
     "anonymous": "匿名ユーザー",
     "recently": "最近",

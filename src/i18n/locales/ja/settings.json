@@ -11,6 +11,7 @@
   },
   "items": {
     "privacy": "プライバシー",
+    "showActiveStatus": "アクティブ状態を表示",
     "notifications": "通知",
     "darkMode": "ダークモード",
     "language": "言語",
@@ -37,6 +38,9 @@
     "privacyPrivate": "アカウントを非公開にしました",
     "privacyPublic": "アカウントを公開にしました",
     "privacyFailed": "プライバシー設定の更新に失敗しました",
+    "activeStatusOn": "アクティブ状態が表示されるようになりました",
+    "activeStatusOff": "アクティブ状態が非表示になりました",
+    "activeStatusFailed": "アクティブ状態の更新に失敗しました",
     "languageChanged": "言語を変更しました"
   },
   "deleteModal": {

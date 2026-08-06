@@ -47,7 +47,7 @@ export default function FollowListModal({ open, type, userId, onClose }) {
 
   if (!open) return null;
 
-  const title = type === "followers" ? "Followers" : "Following";
+  const title = type === "followers" ? "People" : "Connected";
 
   return (
     <div
@@ -86,8 +86,8 @@ export default function FollowListModal({ open, type, userId, onClose }) {
           {!loading && !error && users.length === 0 && (
             <p className="text-center text-sm text-gray-500 py-14">
               {type === "followers"
-                ? "No followers yet"
-                : "Not following anyone yet"}
+                ? "No supporters yet"
+                : "Not connected with anyone yet"}
             </p>
           )}
 
@@ -121,7 +121,7 @@ export default function FollowListModal({ open, type, userId, onClose }) {
 
                 {u.isFollowing && (
                   <span className="text-[10px] font-medium text-[#a78bfa] bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-full shrink-0">
-                    Following
+                    Connected
                   </span>
                 )}
               </Link>

@@ -48,6 +48,10 @@
     "logWorkout": "Log Workout"
   },
 
+  "success": {
+    "workoutLogged": "Workout logged successfully!"
+  },
+
   "errors": {
     "saveFailed": "Failed to log workout",
     "networkError": "Network error"

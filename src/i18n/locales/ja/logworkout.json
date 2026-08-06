@@ -48,6 +48,10 @@
     "logWorkout": "ワークアウトを記録"
   },
 
+  "success": {
+    "workoutLogged": "ワークアウトの記録に成功しました！"
+  },
+
   "errors": {
     "saveFailed": "ワークアウトの記録に失敗しました",
     "networkError": "ネットワークエラー"

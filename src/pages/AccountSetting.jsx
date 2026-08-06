@@ -26,7 +26,7 @@ const LANGUAGES = [
 ];
 
 export default function AccountSettings() {
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation("settings");
 
@@ -38,16 +38,21 @@ export default function AccountSettings() {
   );
   const [isPrivate, setIsPrivate] = useState(false);
   const [privacyLoading, setPrivacyLoading] = useState(false);
+  const [showActiveStatus, setShowActiveStatus] = useState(true);
+  const [activeStatusLoading, setActiveStatusLoading] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-  // ─── Load current privacy setting ───
+  // ─── Load current privacy + active status settings ───
   useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
     axios
       .get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } })
-      .then((res) => setIsPrivate(!!res.data.user?.isPrivate))
+      .then((res) => {
+        setIsPrivate(!!res.data.user?.isPrivate);
+        setShowActiveStatus(res.data.user?.show_active_status !== false);
+      })
       .catch((err) => console.error("Failed to load privacy setting:", err));
   }, []);
 
@@ -121,6 +126,38 @@ export default function AccountSettings() {
     }
   };
 
+  // ─── Toggle show active status ───
+  const toggleActiveStatus = async () => {
+    const next = !showActiveStatus;
+    setShowActiveStatus(next);
+    setActiveStatusLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const { data } = await axios.patch(
+        "/api/users/active-status",
+        { showActiveStatus: next },
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      setShowActiveStatus(data.showActiveStatus);
+      // ── Sync back to AuthContext + localStorage so FeedPostCard's
+      //    viewer.show_active_status check reflects the change immediately
+      //    without requiring a full page reload.
+      updateUser({ show_active_status: data.showActiveStatus });
+      showToast(
+        data.showActiveStatus
+          ? t("toast.activeStatusOn")
+          : t("toast.activeStatusOff"),
+        "success",
+      );
+    } catch (err) {
+      console.error("Failed to update active status:", err);
+      setShowActiveStatus(!next);
+      showToast(t("toast.activeStatusFailed"), "error");
+    } finally {
+      setActiveStatusLoading(false);
+    }
+  };
+
   // ─── Change language ───
   const changeLanguage = (lng) => {
     i18n.changeLanguage(lng);
@@ -146,6 +183,17 @@ export default function AccountSettings() {
               ? t("values.private")
               : t("values.public"),
           action: togglePrivacy,
+        },
+        {
+          id: "activeStatus",
+          icon: <Shield size={16} className="text-green-400" />,
+          label: t("items.showActiveStatus"),
+          value: activeStatusLoading
+            ? t("values.loading")
+            : showActiveStatus
+              ? t("values.on")
+              : t("values.off"),
+          action: toggleActiveStatus,
         },
         {
           id: "notifications",
@@ -328,7 +376,10 @@ export default function AccountSettings() {
                 <button
                   key={item.id}
                   onClick={item.action}
-                  disabled={item.id === "privacy" && privacyLoading}
+                  disabled={
+                    (item.id === "privacy" && privacyLoading) ||
+                    (item.id === "activeStatus" && activeStatusLoading)
+                  }
                   className={`w-full flex items-center gap-3 px-4 py-3.5 text-left hover:bg-white/5 transition-colors disabled:opacity-60 ${idx !== group.items.length - 1 ? "border-b border-white/5" : ""}`}
                 >
                   <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">

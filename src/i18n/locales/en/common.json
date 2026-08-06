@@ -20,5 +20,14 @@
   "toggle": {
     "on": "On",
     "off": "Off"
+  },
+
+  "activeStatus": {
+    "activeNow": "Active now",
+    "activeMinutesAgo": "Active {{count}}m ago",
+    "activeHoursAgo": "Active {{count}}h ago",
+    "activeDaysAgo": "Active {{count}}d ago",
+    "showActiveStatus": "Show active status",
+    "showActiveStatusDesc": "Let others see when you're active"
   }
 }

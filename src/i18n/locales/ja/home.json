@@ -13,6 +13,9 @@
     "setGoalCta": "目標を設定する",
     "goalProgressTitle": "目標の進捗",
     "goalsSuffix": "目標",
+    "goalSet_one": "{{count}}つの目標を設定",
+    "goalSet_other": "{{count}}つの目標を設定",
+    "restDayGoal": "休養日 — 目標は明日から",
     "thisWeek": "今週",
     "totalCalories": "総消費カロリー",
     "splitCompliance": "スプリット達成率",
@@ -38,11 +41,22 @@
     "sun": "日"
   },
 
-  "quickActions": {
-    "readyPrompt": "準備はいい？",
-    "logWorkout": "ワークアウトを記録",
-    "checkPrompt": "確認",
-    "myGoals": "自分の目標"
+  "todayPlan": {
+    "eyebrow": "今日",
+    "restDay": "休息日",
+    "restDayMessage": "ゆっくり休んで回復しましょう。よく頑張りました。",
+    "exerciseCount": "{{count}}種目",
+    "exerciseCount_one": "{{count}}種目",
+    "estDuration": "約{{count}}分",
+    "streak": "{{count}}日連続",
+    "streak_one": "{{count}}日連続",
+    "tapHint": "下の+をタップしてこのセッションを記録",
+    "noPlan": "今日の予定はありません",
+    "setUpSplit": "週間スプリットを設定すると、今日のワークアウトがここに表示されます。",
+    "setUpCta": "スプリットを設定",
+    "previewTitle": "今日のプラン",
+    "noExercises": "このセッションにはまだ種目がありません。",
+    "notLogged": "まだ記録されていません"
   },
 
   "feed": {
@@ -51,7 +65,10 @@
     "notFollowingAnyone": "まだ誰もフォローしていません",
     "discoverInCommunity": "コミュニティフィードで新しい人を見つけよう →",
     "noPosts": "まだ投稿がありません。最初にワークアウトをシェアしましょう！",
-    "loadMore": "もっと見る"
+    "loadMore": "もっと見る",
+    "findYourPartners": "トレーニング仲間を見つけよう",
+    "findPartnersDesc": "同じ目標を持つ人をフォローすると、ここにワークアウトが表示されます。",
+    "discoverPeople": "人を見つける"
   },
 
   "goalModal": {

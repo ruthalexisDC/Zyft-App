@@ -51,8 +51,14 @@ export const getFeed = async (req, res) => {
 
     // Always fetch following list — used both to filter the "following" feed
     // AND to set isFollowing on every post author regardless of feed type.
-    const currentUser = await User.findById(userId).select('following');
+    // Also fetch the viewer's show_active_status so we can apply the
+    // reciprocity rule (if the VIEWER disabled active status, they can't
+    // see it on others either — same as the profile endpoint).
+    const currentUser = await User.findById(userId).select(
+      'following show_active_status'
+    );
     const followingIds = (currentUser?.following ?? []).map((id) => id.toString());
+    const viewerShowsActiveStatus = currentUser?.show_active_status !== false;
 
     let query = {};
 
@@ -77,13 +83,21 @@ export const getFeed = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('user', 'name handle avatar')
+      .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
       .lean();
 
     const postsWithData = await Promise.all(
       posts.map(async (post) => {
         const commentCount = await Comment.countDocuments({ post: post._id });
         const isOwnPost = post.user?._id?.toString() === userId.toString();
+        // ── Active status reciprocity ──
+        // If the post author OR the viewer has disabled "show active
+        // status", hide it (same rule as the profile endpoint).
+        const authorShowsActiveStatus =
+          post.user?.show_active_status !== false;
+        const showActiveStatus =
+          authorShowsActiveStatus && viewerShowsActiveStatus;
+
         return {
           ...post,
           respectCount: post.respects?.length || 0,
@@ -97,6 +111,10 @@ export const getFeed = async (req, res) => {
                 isFollowing: isOwnPost
                   ? false
                   : followingIds.includes(post.user._id.toString()),
+                last_active_at: showActiveStatus
+                  ? post.user.last_active_at
+                  : null,
+                isOnline: showActiveStatus ? post.user.isOnline : false,
               }
             : post.user,
         };
@@ -167,7 +185,7 @@ export const getPost = async (req, res) => {
     const userId = req.user._id;
 
     const post = await Post.findById(postId)
-      .populate('user', 'name handle avatar')
+      .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
       .populate('originalPost');
 
     if (!post) {
@@ -184,10 +202,29 @@ export const getPost = async (req, res) => {
       return obj;
     });
 
+    // ── Active status reciprocity ──
+    // If the post author OR the viewer disabled "show active status",
+    // hide the author's active status (same rule as the profile endpoint).
+    const [viewer, author] = await Promise.all([
+      User.findById(userId).select('show_active_status'),
+      User.findById(post.user?._id).select('show_active_status'),
+    ]);
+    const showActiveStatus =
+      author?.show_active_status !== false &&
+      viewer?.show_active_status !== false;
+
+    const postObj = post.toObject();
+    if (postObj.user) {
+      postObj.user.last_active_at = showActiveStatus
+        ? postObj.user.last_active_at
+        : null;
+      postObj.user.isOnline = showActiveStatus ? postObj.user.isOnline : false;
+    }
+
     res.json({
       success: true,
       post: {
-        ...post.toObject(),
+        ...postObj,
         didRespect: post.didUserRespect(userId),
         comments: commentsWithReactions,
         commentCount: commentsWithReactions.length,
@@ -230,19 +267,40 @@ export const getUserPosts = async (req, res) => {
 
     const query = { user: userId, ...visibilityFilter };
 
+    // ── Active status reciprocity ──
+    // If the post author OR the viewer disabled "show active status",
+    // hide the author's active status (same rule as the profile endpoint).
+    const [viewer, author] = await Promise.all([
+      User.findById(currentUserId).select('show_active_status'),
+      User.findById(userId).select('show_active_status'),
+    ]);
+    const showActiveStatus =
+      author?.show_active_status !== false &&
+      viewer?.show_active_status !== false;
+
     const posts = await Post.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('user', 'name handle avatar')
+      .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
       .populate('workout')
       .lean();
 
     const postsWithData = await Promise.all(
       posts.map(async (post) => {
         const commentCount = await Comment.countDocuments({ post: post._id });
+        const userWithActiveStatus = post.user
+          ? {
+              ...post.user,
+              last_active_at: showActiveStatus
+                ? post.user.last_active_at
+                : null,
+              isOnline: showActiveStatus ? post.user.isOnline : false,
+            }
+          : post.user;
         return {
           ...post,
+          user: userWithActiveStatus,
           respectCount: post.respects?.length || 0,
           commentCount,
           didRespect:

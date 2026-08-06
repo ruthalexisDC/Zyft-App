@@ -11,6 +11,7 @@
   },
   "items": {
     "privacy": "Privacy",
+    "showActiveStatus": "Show active status",
     "notifications": "Notifications",
     "darkMode": "Dark Mode",
     "language": "Language",
@@ -36,6 +37,9 @@
     "privacyPrivate": "Your account is now private",
     "privacyPublic": "Your account is now public",
     "privacyFailed": "Failed to update privacy setting",
+    "activeStatusOn": "Active status is now visible",
+    "activeStatusOff": "Active status is now hidden",
+    "activeStatusFailed": "Failed to update active status",
     "languageChanged": "Language updated"
   },
   "deleteModal": {
