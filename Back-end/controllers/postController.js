@@ -86,8 +86,10 @@ export const getFeed = async (req, res) => {
       .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
       .lean();
 
+       const validPosts = posts.filter(p => p.user != null);
+
     const postsWithData = await Promise.all(
-      posts.map(async (post) => {
+      validPosts.map(async (post) => {
         const commentCount = await Comment.countDocuments({ post: post._id });
         const isOwnPost = post.user?._id?.toString() === userId.toString();
         // ── Active status reciprocity ──

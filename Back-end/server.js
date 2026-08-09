@@ -125,7 +125,6 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-app.use(helmet());
 
 // Mount routes — each prefix used exactly once
 app.use('/api/auth',          authRoutes);

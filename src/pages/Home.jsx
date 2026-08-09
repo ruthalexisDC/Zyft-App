@@ -1,6 +1,7 @@
 // import { useState, useEffect, useMemo, useCallback } from "react";
 // import { Link } from "react-router-dom";
 // import { useAuth } from "../context/AuthContext.jsx";
+// import { useTranslation } from "react-i18next";
 // import {
 //   Loader2,
 //   RefreshCw,
@@ -9,6 +10,7 @@
 //   Zap,
 //   Flame,
 //   CalendarDays,
+//   Users,
 // } from "lucide-react";
 // import { getPosts, updatePost, deletePost, respectPost } from "../api/posts";
 // import { getUserStats, updateUserGoal } from "../api/stats";
@@ -17,7 +19,10 @@
 // import FeedPostCard from "../components/FeedPostCard";
 // import { useSocket } from "../context/SocketContext.jsx";
 // import { API_ORIGIN } from "../config";
+// import WorkoutCard from "../components/WorkoutCard";
 
+// // Internal keys used for data/indexing — NOT translated directly.
+// // Display labels are looked up via t(`home:days.${DAYS[i].toLowerCase()}`).
 // const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 // const API_URL = API_ORIGIN;
 
@@ -118,6 +123,7 @@
 
 // export default function Home() {
 //   const { user, authReady, resetKey } = useAuth();
+//   const { t } = useTranslation(["home", "common"]);
 //   const [posts, setPosts] = useState([]);
 //   const [loading, setLoading] = useState(true);
 //   const [error, setError] = useState(null);
@@ -127,6 +133,8 @@
 //   const [newGoalInput, setNewGoalInput] = useState("");
 
 //   const [showSplitModal, setShowSplitModal] = useState(false);
+//   const [showPlanPreview, setShowPlanPreview] = useState(false);
+
 //   const [userSplit, setUserSplit] = useState(Array(7).fill("Rest"));
 //   const [splitLoading, setSplitLoading] = useState(false);
 //   const { isUserOnline } = useSocket();
@@ -375,11 +383,12 @@
 
 //   const userInitial = currentUser?.name?.charAt(0).toUpperCase() || "Y";
 
+//   // ── Greeting now pulls from home.json instead of hardcoded English ──
 //   const greeting = () => {
 //     const hour = new Date().getHours();
-//     if (hour < 12) return "Good morning";
-//     if (hour < 17) return "Good afternoon";
-//     return "Good evening";
+//     if (hour < 12) return t("home:greeting.morning");
+//     if (hour < 17) return t("home:greeting.afternoon");
+//     return t("home:greeting.evening");
 //   };
 
 //   const todayStats = useMemo(
@@ -392,6 +401,22 @@
 //         calories: 0,
 //       },
 //     [stats],
+//   );
+
+//   // ── CHANGED: Zero-state detection for novice users ──
+//   // When the user has no logged data yet, don't show demotivating "0"/"0%"
+//   // values. Instead, show encouraging placeholder text/values.
+//   const hasWorkoutData = useMemo(
+//     () =>
+//       todayStats.workouts > 0 ||
+//       todayStats.calories > 0 ||
+//       todayStats.consistency > 0,
+//     [todayStats.workouts, todayStats.calories, todayStats.consistency],
+//   );
+
+//   const hasSplitConfigured = useMemo(
+//     () => userSplit.some((day) => day && day !== "Rest"),
+//     [userSplit],
 //   );
 
 //   const goalProgress = useMemo(() => {
@@ -419,10 +444,11 @@
 //       <div className="flex items-center justify-between mb-6">
 //         <div>
 //           <p className="text-xs text-gray-500 font-extrabold uppercase tracking-widest mb-0.5">
-//             Zyft
+//             {t("common:appName")}
 //           </p>
 //           <h1 className="text-lg text-gray-300 leading-tight">
-//             {greeting()}, {currentUser?.name?.split(" ")[0] || "Athlete"} 👋
+//             {greeting()},{" "}
+//             {currentUser?.name?.split(" ")[0] || t("home:athleteFallback")} 👋
 //           </h1>
 //         </div>
 //         <div className="relative">
@@ -433,7 +459,7 @@
 //             {currentUser?.avatar ? (
 //               <img
 //                 src={currentUser.avatar}
-//                 alt="Profile"
+//                 alt={t("home:athleteFallback")}
 //                 className="w-full h-full object-cover"
 //               />
 //             ) : (
@@ -452,14 +478,14 @@
 
 //         <div className="flex items-center justify-between mb-1">
 //           <h2 className="text-sm font-semibold text-gray-300">
-//             Today's Energy
+//             {t("home:energy.title")}
 //           </h2>
 //           <div className="flex items-center gap-2">
 //             <button
 //               onClick={refreshStats}
 //               disabled={statsLoading}
 //               className="text-gray-600 hover:text-gray-400 transition-colors disabled:opacity-30"
-//               title="Refresh stats"
+//               title={t("home:energy.refreshTitle")}
 //             >
 //               <RefreshCw
 //                 size={12}
@@ -476,8 +502,8 @@
 //               }`}
 //               title={
 //                 todayStats.totalGoals
-//                   ? "Goal progress"
-//                   : "Tap to set daily goal"
+//                   ? t("home:energy.goalProgressTitle")
+//                   : t("home:energy.setGoalTitle")
 //               }
 //             >
 //               <Target
@@ -486,7 +512,11 @@
 //                   todayStats.totalGoals ? "text-gray-500" : "text-gray-600"
 //                 }
 //               />
-//               {todayStats.goalsCompleted}/{todayStats.totalGoals || "—"} goals
+//               {todayStats.totalGoals
+//                 ? todayLabel === "Rest"
+//                   ? t("home:energy.restDayGoal")
+//                   : t("home:energy.goalSet", { count: todayStats.totalGoals })
+//                 : t("home:energy.setGoalCta")}
 //             </button>
 //           </div>
 //         </div>
@@ -509,16 +539,28 @@
 //               <div className="w-7 h-7 rounded-full bg-[#8b5cf6]/20 flex items-center justify-center">
 //                 <Target size={14} className="text-purple-400" />
 //               </div>
-//               <span className="text-lg font-bold">{todayStats.workouts}</span>
-//               <span className="text-[10px] text-gray-500">This Week</span>
+//               <span
+//                 className={`text-lg font-bold ${hasWorkoutData ? "" : "text-gray-600"}`}
+//               >
+//                 {hasWorkoutData ? todayStats.workouts : "—"}
+//               </span>
+//               <span className="text-[10px] text-gray-500">
+//                 {t("home:energy.thisWeek")}
+//               </span>
 //             </Link>
 
 //             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex flex-col items-center gap-1">
 //               <div className="w-7 h-7 rounded-full bg-yellow-500/20 flex items-center justify-center">
 //                 <Zap size={14} className="text-yellow-400" />
 //               </div>
-//               <span className="text-lg font-bold">{todayStats.calories}</span>
-//               <span className="text-[10px] text-gray-500">Total Calories</span>
+//               <span
+//                 className={`text-lg font-bold ${hasWorkoutData ? "" : "text-gray-600"}`}
+//               >
+//                 {hasWorkoutData ? todayStats.calories : "—"}
+//               </span>
+//               <span className="text-[10px] text-gray-500">
+//                 {t("home:energy.totalCalories")}
+//               </span>
 //             </div>
 
 //             <button
@@ -528,11 +570,17 @@
 //               <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center">
 //                 <Flame size={14} className="text-blue-400" />
 //               </div>
-//               <span className="text-lg font-bold">
-//                 {todayStats.consistency ?? 0}%
+//               <span
+//                 className={`text-lg font-bold ${hasWorkoutData && hasSplitConfigured ? "" : "text-gray-600"}`}
+//               >
+//                 {hasWorkoutData && hasSplitConfigured
+//                   ? `${todayStats.consistency ?? 0}%`
+//                   : "—"}
 //               </span>
-//               <span className="text-[10px] text-gray-500">
-//                 Split Compliance
+//               <span className="text-[10px] text-gray-500 leading-tight text-center">
+//                 {hasSplitConfigured
+//                   ? t("home:energy.splitCompliance")
+//                   : t("home:energy.noSplitYet")}
 //               </span>
 //               <div className="absolute -top-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity">
 //                 <CalendarDays size={10} className="text-blue-400" />
@@ -541,23 +589,33 @@
 //           </div>
 //         )}
 
+//         {!statsLoading && !hasWorkoutData && (
+//           <p className="text-[11px] text-gray-500 mt-3 text-center">
+//             {t("home:energy.noDataMessage")}
+//           </p>
+//         )}
+
 //         {!splitLoading && (
 //           <div className="mt-3 pt-3 border-t border-white/5">
 //             <div className="flex items-center justify-between mb-1.5">
 //               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
-//                 This Week's Split
+//                 {t("home:split.title")}
 //               </span>
 //               <button
 //                 onClick={() => setShowSplitModal(true)}
 //                 className="text-[10px] text-blue-400 hover:text-blue-300 transition-colors"
 //               >
-//                 Edit
+//                 {t("common:edit")}
 //               </button>
 //             </div>
 //             <div className="flex gap-1">
 //               {DAYS.map((day, i) => {
 //                 const isToday = i === todayIndex;
 //                 const isRest = userSplit[i] === "Rest";
+//                 // DAYS entries (Mon/Tue/...) are internal keys — look up the
+//                 // localized label, then take its first character for the
+//                 // compact single-letter/kanji chip.
+//                 const dayLabel = t(`home:days.${day.toLowerCase()}`);
 //                 return (
 //                   <div
 //                     key={day}
@@ -572,11 +630,14 @@
 //                     <p
 //                       className={`text-[9px] font-bold ${isToday ? "text-blue-400" : "text-gray-500"}`}
 //                     >
-//                       {day[0]}
+//                       {dayLabel.charAt(0)}
 //                     </p>
 //                     <p
 //                       className={`text-[8px] truncate ${isRest ? "text-gray-600" : isToday ? "text-blue-300" : "text-purple-300"}`}
 //                     >
+//                       {/* "Rest" is a data value from the API/default state —
+//                           translate it for display; any other value is a
+//                           user-defined split name and stays as-is. */}
 //                       {userSplit[i] === "Rest" ? "—" : userSplit[i]}
 //                     </p>
 //                   </div>
@@ -584,7 +645,7 @@
 //               })}
 //             </div>
 //             <p className="text-[10px] text-gray-500 mt-1.5 text-center">
-//               Today:{" "}
+//               {t("home:split.today")}{" "}
 //               <span
 //                 className={
 //                   todayLabel === "Rest"
@@ -592,40 +653,128 @@
 //                     : "text-blue-400 font-semibold"
 //                 }
 //               >
-//                 {todayLabel}
+//                 {todayLabel === "Rest" ? t("home:split.rest") : todayLabel}
 //               </span>
 //             </p>
 //           </div>
 //         )}
 //       </div>
 
-//       {/* ── Quick Actions ── */}
-//       <div className="grid grid-cols-2 gap-3 mb-6">
-//         <Link
-//           to="/log"
-//           className="bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] rounded-2xl p-4 flex items-center gap-3 hover:opacity-90 active:scale-[0.98] transition-all"
-//         >
-//           <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center shrink-0">
-//             <Dumbbell size={18} className="text-white" />
+//       {/* ── Today's Plan Card ── */}
+//       <div className="mb-6">
+//         {!hasSplitConfigured ? (
+//           /* ── Empty state: no split configured — invite to set up ── */
+//           <div className="bg-[#13131f] rounded-2xl p-4 border border-white/5">
+//             <div className="flex items-center gap-3">
+//               <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+//                 <Dumbbell size={18} className="text-purple-400" />
+//               </div>
+//               <div className="flex-1">
+//                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+//                   {t("home:todayPlan.eyebrow")}
+//                 </p>
+//                 <p className="text-sm font-semibold text-white">
+//                   {t("home:todayPlan.noPlan")}
+//                 </p>
+//                 <p className="text-[11px] text-gray-500 mt-0.5">
+//                   {t("home:todayPlan.setUpSplit")}
+//                 </p>
+//               </div>
+//               <button
+//                 onClick={() => setShowSplitModal(true)}
+//                 className="text-xs px-3 py-2 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 font-semibold hover:bg-purple-500/25 transition-colors shrink-0"
+//               >
+//                 {t("home:todayPlan.setUpCta")}
+//               </button>
+//             </div>
 //           </div>
-//           <div>
-//             <p className="text-xs text-purple-200">Ready?</p>
-//             <p className="text-sm font-semibold text-white">Log Workout</p>
+//         ) : todayLabel === "Rest" ? (
+//           /* ── Rest day: simplified card ── */
+//           <div
+//             role="button"
+//             tabIndex={0}
+//             onClick={() => setShowPlanPreview(true)}
+//             onKeyDown={(e) => {
+//               if (e.key === "Enter" || e.key === " ") {
+//                 e.preventDefault();
+//                 setShowPlanPreview(true);
+//               }
+//             }}
+//             className="bg-[#13131f] rounded-2xl p-4 border border-white/5 hover:border-white/10 active:scale-[0.99] transition-all cursor-pointer"
+//           >
+//             <div className="flex items-start justify-between mb-2">
+//               <div>
+//                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+//                   {t("home:todayPlan.eyebrow")}
+//                 </p>
+//                 <h3 className="text-base font-bold text-white">
+//                   {t("home:todayPlan.restDay")}
+//                 </h3>
+//               </div>
+//               <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+//                 <Dumbbell size={16} className="text-gray-400" />
+//               </div>
+//             </div>
+//             <p className="text-xs text-gray-500 leading-relaxed">
+//               {t("home:todayPlan.restDayMessage")}
+//             </p>
+//             <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+//               <div className="flex items-center gap-1.5">
+//                 <Flame size={14} className="text-orange-400" />
+//                 <span className="text-xs text-gray-400">
+//                   {t("home:todayPlan.streak", {
+//                     count: currentUser?.streakCount || 0,
+//                   })}
+//                 </span>
+//               </div>
+//               <span className="text-[11px] text-gray-500">
+//                 {t("home:todayPlan.tapHint")}
+//               </span>
+//             </div>
 //           </div>
-//         </Link>
-
-//         <Link
-//           to="/activity"
-//           className="bg-[#13131f] border border-white/5 rounded-2xl p-4 flex items-center gap-3 hover:border-white/10 active:scale-[0.98] transition-all"
-//         >
-//           <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-//             <Target size={18} className="text-purple-400" />
+//         ) : (
+//           /* ── Active day: full "Today's plan" card ── */
+//           <div
+//             role="button"
+//             tabIndex={0}
+//             onClick={() => setShowPlanPreview(true)}
+//             onKeyDown={(e) => {
+//               if (e.key === "Enter" || e.key === " ") {
+//                 e.preventDefault();
+//                 setShowPlanPreview(true);
+//               }
+//             }}
+//             className="bg-[#13131f] rounded-2xl p-4 border border-white/5 hover:border-white/10 active:scale-[0.99] transition-all cursor-pointer"
+//           >
+//             <div className="flex items-start justify-between mb-2">
+//               <div>
+//                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+//                   {t("home:todayPlan.eyebrow")}
+//                 </p>
+//                 <h3 className="text-base font-bold text-white">{todayLabel}</h3>
+//               </div>
+//               <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+//                 <Dumbbell size={16} className="text-purple-400" />
+//               </div>
+//             </div>
+//             <p className="text-xs text-gray-400">
+//               {t("home:todayPlan.notLogged")}
+//             </p>
+//             <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
+//               <div className="flex items-center gap-1.5">
+//                 <Flame size={14} className="text-orange-400" />
+//                 <span className="text-xs text-gray-400">
+//                   {t("home:todayPlan.streak", {
+//                     count: currentUser?.streakCount || 0,
+//                   })}
+//                 </span>
+//               </div>
+//               <span className="text-[11px] text-gray-500">
+//                 {t("home:todayPlan.tapHint")}
+//               </span>
+//             </div>
 //           </div>
-//           <div>
-//             <p className="text-xs text-gray-500">Check</p>
-//             <p className="text-sm font-semibold text-white">My Goals</p>
-//           </div>
-//         </Link>
+//         )}
 //       </div>
 
 //       {/* ── Feed Header with Following/Community tabs ── */}
@@ -639,7 +788,7 @@
 //                 : "text-gray-500 hover:text-gray-300"
 //             }`}
 //           >
-//             Following
+//             {t("home:feed.following")}
 //           </button>
 //           <button
 //             onClick={() => setFeedType("community")}
@@ -649,11 +798,11 @@
 //                 : "text-gray-500 hover:text-gray-300"
 //             }`}
 //           >
-//             Community
+//             {t("home:feed.community")}
 //           </button>
 //         </div>
 //         <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-//           See all
+//           {t("common:seeAll")}
 //         </button>
 //       </div>
 
@@ -663,21 +812,29 @@
 //       ) : error ? (
 //         <div className="text-center py-10 text-red-400 text-sm">{error}</div>
 //       ) : posts.length === 0 ? (
-//         <div className="text-center py-10 text-gray-500 text-sm">
-//           {feedType === "following" ? (
-//             <>
-//               <p className="mb-3">You're not following anyone yet.</p>
-//               <button
-//                 onClick={() => setFeedType("community")}
-//                 className="text-purple-400 hover:text-purple-300 text-xs font-semibold"
-//               >
-//                 Discover people in the Community feed →
-//               </button>
-//             </>
-//           ) : (
-//             "No posts yet. Be the first to share a workout!"
-//           )}
-//         </div>
+//         feedType === "following" ? (
+//           <div className="bg-[#13131f] border border-white/5 rounded-2xl px-6 py-10 text-center">
+//             <div className="w-14 h-14 rounded-full bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4">
+//               <Users size={26} className="text-purple-400" />
+//             </div>
+//             <h3 className="text-sm font-semibold text-gray-300 mb-1.5">
+//               {t("home:feed.findYourPartners")}
+//             </h3>
+//             <p className="text-xs text-gray-500 leading-relaxed mb-5 max-w-[240px] mx-auto">
+//               {t("home:feed.findPartnersDesc")}
+//             </p>
+//             <Link
+//               to="/discover"
+//               className="inline-block px-5 py-2.5 rounded-full border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/10 transition-colors"
+//             >
+//               {t("home:feed.discoverPeople")}
+//             </Link>
+//           </div>
+//         ) : (
+//           <div className="text-center py-10 text-gray-500 text-sm">
+//             {t("home:feed.noPosts")}
+//           </div>
+//         )
 //       ) : (
 //         <div className="space-y-4">
 //           {posts.map((post) => (
@@ -695,7 +852,7 @@
 
 //       {!loading && posts.length > 0 && (
 //         <button className="w-full py-5 text-xs text-gray-600 hover:text-gray-400 transition-all flex items-center justify-center gap-2 mt-2">
-//           Load more posts
+//           {t("home:feed.loadMore")}
 //         </button>
 //       )}
 
@@ -703,9 +860,11 @@
 //       {showGoalModal && (
 //         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
 //           <div className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-xs border border-white/10 shadow-xl">
-//             <h3 className="text-sm font-semibold mb-1">Set Daily Goal</h3>
+//             <h3 className="text-sm font-semibold mb-1">
+//               {t("home:goalModal.title")}
+//             </h3>
 //             <p className="text-xs text-gray-500 mb-4">
-//               How many workouts today?
+//               {t("home:goalModal.subtitle")}
 //             </p>
 //             <input
 //               type="number"
@@ -714,7 +873,7 @@
 //               value={newGoalInput}
 //               onChange={(e) => setNewGoalInput(e.target.value)}
 //               onKeyDown={(e) => e.key === "Enter" && handleSetGoal()}
-//               placeholder="e.g. 3"
+//               placeholder={t("home:goalModal.placeholder")}
 //               autoFocus
 //               className="w-full bg-[#0a0a0a] rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/10 placeholder-gray-600 mb-4"
 //             />
@@ -726,15 +885,75 @@
 //                 }}
 //                 className="flex-1 py-2.5 text-xs text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors"
 //               >
-//                 Cancel
+//                 {t("common:cancel")}
 //               </button>
 //               <button
 //                 onClick={handleSetGoal}
 //                 disabled={!newGoalInput || parseInt(newGoalInput) < 1}
 //                 className="flex-1 py-2.5 text-xs bg-purple-600 hover:bg-purple-500 disabled:bg-purple-600/30 rounded-xl transition-colors"
 //               >
-//                 Set Goal
+//                 {t("home:goalModal.setGoal")}
 //               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* ── Today's Plan Preview (read-only) ── */}
+//       {showPlanPreview && (
+//         <div
+//           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4"
+//           onClick={() => setShowPlanPreview(false)}
+//         >
+//           <div
+//             className="bg-[#1a1a2e] rounded-2xl p-5 w-full max-w-sm border border-white/10 shadow-xl"
+//             onClick={(e) => e.stopPropagation()}
+//           >
+//             <div className="flex items-start justify-between mb-4">
+//               <div>
+//                 <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
+//                   {t("home:todayPlan.eyebrow")}
+//                 </p>
+//                 <h3 className="text-lg font-bold text-white">
+//                   {todayLabel === "Rest"
+//                     ? t("home:todayPlan.restDay")
+//                     : todayLabel}
+//                 </h3>
+//               </div>
+//               <button
+//                 onClick={() => setShowPlanPreview(false)}
+//                 className="text-gray-400 hover:text-white transition-colors text-xl leading-none"
+//                 aria-label="Close"
+//               >
+//                 ×
+//               </button>
+//             </div>
+
+//             {todayLabel === "Rest" ? (
+//               <p className="text-sm text-gray-400 leading-relaxed">
+//                 {t("home:todayPlan.restDayMessage")}
+//               </p>
+//             ) : (
+//               <div className="flex items-center justify-center gap-2 py-6 text-gray-500">
+//                 <Dumbbell size={20} className="text-purple-400" />
+//                 <span className="text-sm">
+//                   {t("home:todayPlan.noExercises")}
+//                 </span>
+//               </div>
+//             )}
+
+//             <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between">
+//               <div className="flex items-center gap-1.5">
+//                 <Flame size={14} className="text-orange-400" />
+//                 <span className="text-xs text-gray-400">
+//                   {t("home:todayPlan.streak", {
+//                     count: currentUser?.streakCount || 0,
+//                   })}
+//                 </span>
+//               </div>
+//               <span className="text-[11px] text-gray-500">
+//                 {t("home:todayPlan.tapHint")}
+//               </span>
 //             </div>
 //           </div>
 //         </div>
@@ -754,7 +973,7 @@
 // }
 
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 import { useTranslation } from "react-i18next";
 import {
@@ -774,6 +993,7 @@ import WorkoutSplitModal from "../components/WorkoutSplitModal";
 import FeedPostCard from "../components/FeedPostCard";
 import { useSocket } from "../context/SocketContext.jsx";
 import { API_ORIGIN } from "../config";
+import WorkoutCard from "../components/WorkoutCard";
 
 // Internal keys used for data/indexing — NOT translated directly.
 // Display labels are looked up via t(`home:days.${DAYS[i].toLowerCase()}`).
@@ -878,6 +1098,7 @@ const HomeSkeleton = () => (
 export default function Home() {
   const { user, authReady, resetKey } = useAuth();
   const { t } = useTranslation(["home", "common"]);
+  const navigate = useNavigate();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -888,6 +1109,7 @@ export default function Home() {
 
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showPlanPreview, setShowPlanPreview] = useState(false);
+
   const [userSplit, setUserSplit] = useState(Array(7).fill("Rest"));
   const [splitLoading, setSplitLoading] = useState(false);
   const { isUserOnline } = useSocket();
@@ -897,6 +1119,119 @@ export default function Home() {
 
   // ── NEW: Fetch full user profile to get avatar ──
   const [fullUser, setFullUser] = useState(null);
+
+  // ── WorkoutCard state & helpers ──
+  const [todayWorkout, setTodayWorkout] = useState({
+    completed: false,
+    completedAt: null,
+    duration: null,
+  });
+
+  const getSplitType = (label) => {
+    const map = {
+      push: "push",
+      pull: "pull",
+      legs: "legs",
+      leg: "legs",
+      upper: "push",
+      lower: "legs",
+      "full body": "fullbody",
+      fullbody: "fullbody",
+      chest: "chest",
+      back: "back",
+      shoulders: "shoulders",
+      shoulder: "shoulders",
+      arms: "arms",
+      arm: "arms",
+      cardio: "cardio",
+    };
+    return map[label?.toLowerCase()] || "fullbody";
+  };
+
+  const getDefaultExercises = (label) => {
+    const type = getSplitType(label);
+    const exercises = {
+      push: [
+        "Bench Press",
+        "Overhead Press",
+        "Incline DB Press",
+        "Lateral Raises",
+        "Tricep Pushdowns",
+        "Skull Crushers",
+      ],
+      pull: [
+        "Deadlifts",
+        "Pull-ups",
+        "Barbell Rows",
+        "Face Pulls",
+        "Barbell Curls",
+        "Hammer Curls",
+      ],
+      legs: [
+        "Squats",
+        "Romanian Deadlifts",
+        "Leg Press",
+        "Leg Curls",
+        "Calf Raises",
+        "Leg Extensions",
+      ],
+      fullbody: [
+        "Squats",
+        "Bench Press",
+        "Barbell Rows",
+        "Overhead Press",
+        "Lat Pulldowns",
+        "Leg Curls",
+        "Bicep Curls",
+        "Tricep Extensions",
+      ],
+      chest: [
+        "Bench Press",
+        "Incline DB Press",
+        "Cable Flyes",
+        "Dips",
+        "Tricep Pushdowns",
+        "Overhead Extensions",
+      ],
+      back: [
+        "Deadlifts",
+        "Barbell Rows",
+        "Lat Pulldowns",
+        "Seated Cable Rows",
+        "Barbell Curls",
+        "Preacher Curls",
+      ],
+      shoulders: [
+        "Overhead Press",
+        "Lateral Raises",
+        "Rear Delt Flyes",
+        "Shrugs",
+        "Hanging Leg Raises",
+        "Planks",
+      ],
+      arms: [
+        "Close-Grip Bench",
+        "Skull Crushers",
+        "Tricep Dips",
+        "Barbell Curls",
+        "Incline Curls",
+        "Concentration Curls",
+      ],
+      cardio: [
+        "Running",
+        "Cycling",
+        "Rowing",
+        "Jump Rope",
+        "Stair Master",
+        "Swimming",
+      ],
+    };
+    return (exercises[type] || []).map((name) => ({ name }));
+  };
+
+  const handleLogTodayWorkout = async () => {
+    navigate("/log");
+  };
 
   useEffect(() => {
     if (!authReady || !user?._id) return;
@@ -1486,47 +1821,20 @@ export default function Home() {
             </div>
           </div>
         ) : (
-          /* ── Active day: full "Today's plan" card ── */
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => setShowPlanPreview(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setShowPlanPreview(true);
-              }
+          /* ── Active day: WorkoutCard ── */
+          <WorkoutCard
+            workout={{
+              id: "today-workout",
+              name: todayLabel,
+              splitType: getSplitType(todayLabel),
+              completed: todayWorkout.completed,
+              completedAt: todayWorkout.completedAt,
+              duration: todayWorkout.duration,
+              exercises: getDefaultExercises(todayLabel),
             }}
-            className="bg-[#13131f] rounded-2xl p-4 border border-white/5 hover:border-white/10 active:scale-[0.99] transition-all cursor-pointer"
-          >
-            <div className="flex items-start justify-between mb-2">
-              <div>
-                <p className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold mb-0.5">
-                  {t("home:todayPlan.eyebrow")}
-                </p>
-                <h3 className="text-base font-bold text-white">{todayLabel}</h3>
-              </div>
-              <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
-                <Dumbbell size={16} className="text-purple-400" />
-              </div>
-            </div>
-            <p className="text-xs text-gray-400">
-              {t("home:todayPlan.notLogged")}
-            </p>
-            <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <Flame size={14} className="text-orange-400" />
-                <span className="text-xs text-gray-400">
-                  {t("home:todayPlan.streak", {
-                    count: currentUser?.streakCount || 0,
-                  })}
-                </span>
-              </div>
-              <span className="text-[11px] text-gray-500">
-                {t("home:todayPlan.tapHint")}
-              </span>
-            </div>
-          </div>
+            streak={currentUser?.streakCount || 0}
+            onLogWorkout={handleLogTodayWorkout}
+          />
         )}
       </div>
 
