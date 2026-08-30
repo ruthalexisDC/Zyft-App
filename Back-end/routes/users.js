@@ -634,4 +634,19 @@ router.get("/", auth, async (req, res) => {
   }
 });
 
+
+router.post("/logout", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+      await User.findByIdAndUpdate(decoded.userId, { $unset: { refreshToken: 1 } });
+    }
+  } catch (err) {
+    // Expired/invalid access token shouldn't block logout — clear the
+    // cookie regardless, the client is trying to end its session either way.
+  }
+  clearRefreshTokenCookie(res); // local version, defined near the top of this file
+  return sendSuccess(res, { statusCode: 200, message: "Logged out" });
+});
 export default router;

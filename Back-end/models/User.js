@@ -7,15 +7,26 @@ import bcrypt from "bcryptjs";
 const userSchema = new mongoose.Schema(
   {
     name:              { type: String, required: true, trim: true },
-    handle:            { type: String, required: true, unique: true, lowercase: true, trim: true },
-    email:             { type: String, required: true, unique: true, lowercase: true },
-    password: {
+    handle: {
       type: String,
-      required: function () {
-        return this.authProvider === 'local' || !this.authProvider;
-      },
-      select: false,
-    },
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      match: [
+        /^[a-z0-9_]+$/,
+        'Handle can only contain letters, numbers, and underscores',
+      ],
+},
+    email:             { type: String, required: true, unique: true, lowercase: true, trim: true },
+    password: {
+  type: String,
+  required: function () {
+    return this.authProvider === 'local' || !this.authProvider;
+  },
+  minlength: 8,
+  select: false,
+},
     avatar:            { type: String, default: "" },
     bio:               { type: String, default: "", maxlength: 200 },
     authProvider:      { type: String, enum: ['local', 'google', 'facebook'], default: 'local' },
@@ -25,6 +36,12 @@ const userSchema = new mongoose.Schema(
     // ── PASSWORD RESET ──
     resetPasswordToken:     { type: String },
     resetPasswordExpires:   { type: Date },
+
+    // ── REFRESH TOKEN ──
+refreshToken: {
+  type: String,
+  select: false,
+},
 
 
     // ── EMAIL VERIFICATION ──
@@ -81,8 +98,9 @@ const userSchema = new mongoose.Schema(
 );
 
 // Hash password before saving
-userSchema.pre("save", async function() {
-  if (!this.isModified("password")) return;
+userSchema.pre("save", async function () {
+  if (!this.isModified("password") || !this.password) return;
+
   this.password = await bcrypt.hash(this.password, 12);
 });
 

@@ -1,3 +1,885 @@
+// import Post from '../models/Post.js';
+// import User from '../models/User.js';
+// import Comment, { REACTION_EMOJIS } from '../models/Comments.js';
+// import Report from '../models/Report.js';
+// import Notification from '../models/Notification.js';
+
+// // ─────────────────────────────────────────
+// // CREATE POST
+// // ─────────────────────────────────────────
+// export const createPost = async (req, res) => {
+//   try {
+//     const { content, workout, media } = req.body;
+//     const userId = req.user?._id || req.body.user;
+
+//     if (!userId) {
+//       return res.status(401).json({ message: 'User authentication required' });
+//     }
+
+//     if (!content || content.trim().length === 0) {
+//       return res.status(400).json({ message: 'Post content is required' });
+//     }
+
+//     const post = await Post.create({
+//       user: userId,
+//       content: content.trim(),
+//       workout: workout || undefined,
+//       media: media || [],
+//     });
+
+//     await post.populate('user', 'name handle avatar');
+
+//     res.status(201).json({
+//       success: true,
+//       post,
+//     });
+//   } catch (error) {
+//     console.error('Create post error:', error);
+//     res.status(500).json({ message: 'Failed to create post', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GET FEED
+// // ─────────────────────────────────────────
+// export const getFeed = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { page = 1, limit = 10, type = 'community' } = req.query;
+
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     // Always fetch following list — used both to filter the "following" feed
+//     // AND to set isFollowing on every post author regardless of feed type.
+//     // Also fetch the viewer's show_active_status so we can apply the
+//     // reciprocity rule (if the VIEWER disabled active status, they can't
+//     // see it on others either — same as the profile endpoint).
+//     const currentUser = await User.findById(userId).select(
+//       'following show_active_status'
+//     );
+//     const followingIds = (currentUser?.following ?? []).map((id) => id.toString());
+//     const viewerShowsActiveStatus = currentUser?.show_active_status !== false;
+
+//     let query = {};
+
+//     if (type === 'following') {
+//       // ── CHANGED: Privacy-first feed. ──
+//       // Show ALL of the viewer's own posts (private, followers, public), but
+//       // from followed users only `public` + `followers` posts — never `private`.
+//       query = {
+//         $or: [
+//           { user: userId },
+//           {
+//             user: { $in: followingIds },
+//             visibility: { $in: ['public', 'followers'] },
+//           },
+//         ],
+//       };
+//     } else {
+//       query = { visibility: 'public' };
+//     }
+
+//     const posts = await Post.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(parseInt(limit))
+//       .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
+//       .lean();
+
+//        const validPosts = posts.filter(p => p.user != null);
+
+//     const postsWithData = await Promise.all(
+//       validPosts.map(async (post) => {
+//         const commentCount = await Comment.countDocuments({ post: post._id });
+//         const isOwnPost = post.user?._id?.toString() === userId.toString();
+//         // ── Active status reciprocity ──
+//         // If the post author OR the viewer has disabled "show active
+//         // status", hide it (same rule as the profile endpoint).
+//         const authorShowsActiveStatus =
+//           post.user?.show_active_status !== false;
+//         const showActiveStatus =
+//           authorShowsActiveStatus && viewerShowsActiveStatus;
+
+//         return {
+//           ...post,
+//           respectCount: post.respects?.length || 0,
+//           commentCount,
+//           didRespect:
+//             post.respects?.some((r) => r.toString() === userId.toString()) ||
+//             false,
+//           user: post.user
+//             ? {
+//                 ...post.user,
+//                 isFollowing: isOwnPost
+//                   ? false
+//                   : followingIds.includes(post.user._id.toString()),
+//                 last_active_at: showActiveStatus
+//                   ? post.user.last_active_at
+//                   : null,
+//                 isOnline: showActiveStatus ? post.user.isOnline : false,
+//               }
+//             : post.user,
+//         };
+//       })
+//     );
+
+//     const total = await Post.countDocuments(query);
+
+//     res.json({
+//       success: true,
+//       posts: postsWithData,
+//       pagination: {
+//         page: parseInt(page),
+//         pages: Math.ceil(total / parseInt(limit)),
+//         total,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to load feed', error: error.message });
+//   }
+// };
+
+
+// // Turns a flat list of comments into top-level comments with a `replies`
+// // array nested underneath each one. Any reply whose parent no longer
+// // exists (e.g. parent was deleted) falls back to top-level instead of
+// // disappearing.
+// function buildCommentTree(comments, userId) {
+//   const byId = new Map();
+//   const topLevel = [];
+
+//   comments.forEach((comment) => {
+//     const obj = comment.toObject({ virtuals: true });
+//     obj.myReaction = comment.getUserReaction(userId);
+//     obj.replies = [];
+//     byId.set(obj._id.toString(), obj);
+//   });
+
+//   byId.forEach((obj) => {
+//     if (obj.parentComment) {
+//       const parent = byId.get(obj.parentComment.toString());
+//       if (parent) {
+//         parent.replies.push(obj);
+//       } else {
+//         topLevel.push(obj);
+//       }
+//     } else {
+//       topLevel.push(obj);
+//     }
+//   });
+
+//   // Newest top-level comments first; replies stay chronological under each
+//   topLevel.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+//   topLevel.forEach((c) =>
+//     c.replies.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+//   );
+
+//   return topLevel;
+// }
+
+
+// // ─────────────────────────────────────────
+// // GET SINGLE POST
+// // ─────────────────────────────────────────
+// export const getPost = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const post = await Post.findById(postId)
+//       .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
+//       .populate('originalPost');
+
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     const comments = await Comment.find({ post: postId })
+//       .populate('user', 'name handle avatar')
+//       .sort({ createdAt: -1 });
+
+//     const commentsWithReactions = comments.map((comment) => {
+//       const obj = comment.toObject({ virtuals: true });
+//       obj.myReaction = comment.getUserReaction(userId);
+//       return obj;
+//     });
+
+//     // ── Active status reciprocity ──
+//     // If the post author OR the viewer disabled "show active status",
+//     // hide the author's active status (same rule as the profile endpoint).
+//     const [viewer, author] = await Promise.all([
+//       User.findById(userId).select('show_active_status'),
+//       User.findById(post.user?._id).select('show_active_status'),
+//     ]);
+//     const showActiveStatus =
+//       author?.show_active_status !== false &&
+//       viewer?.show_active_status !== false;
+
+//     const postObj = post.toObject();
+//     if (postObj.user) {
+//       postObj.user.last_active_at = showActiveStatus
+//         ? postObj.user.last_active_at
+//         : null;
+//       postObj.user.isOnline = showActiveStatus ? postObj.user.isOnline : false;
+//     }
+
+//     res.json({
+//       success: true,
+//       post: {
+//         ...postObj,
+//         didRespect: post.didUserRespect(userId),
+//         comments: commentsWithReactions,
+//         commentCount: commentsWithReactions.length,
+//       },
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to get post', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GET USER'S POSTS
+// // ─────────────────────────────────────────
+// export const getUserPosts = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+//     const { page = 1, limit = 10 } = req.query;
+//     const currentUserId = req.user._id;
+
+//     const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//     // ── CHANGED: Respect post visibility per viewer. ──
+//     // - The profile owner sees every post (public, followers, private).
+//     // - Followers see `public` + `followers` posts.
+//     // - Everyone else sees only `public` posts.
+//     const isOwnProfile = currentUserId?.toString() === userId.toString();
+//     let visibilityFilter = { visibility: 'public' };
+
+//     if (isOwnProfile) {
+//       visibilityFilter = {};
+//     } else {
+//       const profileOwner = await User.findById(userId).select('followers');
+//       const viewerFollowsOwner = (profileOwner?.followers ?? []).some(
+//         (id) => id.toString() === currentUserId?.toString()
+//       );
+//       if (viewerFollowsOwner) {
+//         visibilityFilter = { visibility: { $in: ['public', 'followers'] } };
+//       }
+//     }
+
+//     const query = { user: userId, ...visibilityFilter };
+
+//     // ── Active status reciprocity ──
+//     // If the post author OR the viewer disabled "show active status",
+//     // hide the author's active status (same rule as the profile endpoint).
+//     const [viewer, author] = await Promise.all([
+//       User.findById(currentUserId).select('show_active_status'),
+//       User.findById(userId).select('show_active_status'),
+//     ]);
+//     const showActiveStatus =
+//       author?.show_active_status !== false &&
+//       viewer?.show_active_status !== false;
+
+//     const posts = await Post.find(query)
+//       .sort({ createdAt: -1 })
+//       .skip(skip)
+//       .limit(parseInt(limit))
+//       .populate('user', 'name handle avatar last_active_at show_active_status isOnline')
+//       .populate('workout')
+//       .lean();
+
+//     const postsWithData = await Promise.all(
+//       posts.map(async (post) => {
+//         const commentCount = await Comment.countDocuments({ post: post._id });
+//         const userWithActiveStatus = post.user
+//           ? {
+//               ...post.user,
+//               last_active_at: showActiveStatus
+//                 ? post.user.last_active_at
+//                 : null,
+//               isOnline: showActiveStatus ? post.user.isOnline : false,
+//             }
+//           : post.user;
+//         return {
+//           ...post,
+//           user: userWithActiveStatus,
+//           respectCount: post.respects?.length || 0,
+//           commentCount,
+//           didRespect:
+//             post.respects?.some(
+//               (r) => r.toString() === currentUserId?.toString()
+//             ) || false,
+//         };
+//       })
+//     );
+
+//     const totalPosts = await Post.countDocuments(query);
+
+//     res.json({
+//       success: true,
+//       posts: postsWithData,
+//       pagination: {
+//         currentPage: parseInt(page),
+//         totalPages: Math.ceil(totalPosts / parseInt(limit)),
+//         totalPosts,
+//         hasMore: skip + posts.length < totalPosts,
+//       },
+//     });
+//   } catch (error) {
+//     console.error('Get user posts error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to get user posts',
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // UPDATE POST
+// // ─────────────────────────────────────────
+// export const updatePost = async (req, res) => {
+//   try {
+//     const post = await Post.findById(req.params.postId);
+
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     if (post.user.toString() !== req.user._id.toString()) {
+//       return res.status(403).json({ message: 'Not authorized to update this post' });
+//     }
+
+//     // ── SECURITY FIX (2026-07-10) ────────────────────────
+//     // This used to do `{ $set: req.body }` — i.e. it trusted the ENTIRE
+//     // request body and wrote it straight into the document. The ownership
+//     // check above only verifies the CURRENT owner before the update; it does
+//     // nothing to stop the request body itself from overwriting fields like
+//     // `user` (hijack post ownership), `respects` (fake likes), `createdAt`,
+//     // or any other field on the schema. This is a classic mass-assignment
+//     // vulnerability. Fix: whitelist only the fields a user should be able to
+//     // edit on their own post.
+//     // ────────────────────────
+//     const EDITABLE_FIELDS = ['content', 'media', 'visibility'];
+//     const updates = {};
+//     for (const field of EDITABLE_FIELDS) {
+//       if (req.body[field] !== undefined) {
+//         updates[field] = req.body[field];
+//       }
+//     }
+
+//     const updatedPost = await Post.findByIdAndUpdate(
+//       req.params.postId,
+//       { $set: updates },
+//       { new: true, runValidators: true }
+//     );
+
+//     res.status(200).json({
+//       success: true,
+//       message: 'Post updated successfully',
+//       post: updatedPost,
+//     });
+//   } catch (error) {
+//     console.error('Update post error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to update post',
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // DELETE POST
+// // ─────────────────────────────────────────
+// export const deletePost = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const post = await Post.findById(postId);
+
+//     if (!post) {
+//       return res.status(404).json({ success: false, message: 'Post not found' });
+//     }
+
+//     if (post.user.toString() !== userId.toString()) {
+//       return res.status(403).json({
+//         success: false,
+//         message: 'You can only delete your own posts',
+//       });
+//     }
+
+//     await Comment.deleteMany({ post: postId });
+//     await Post.findByIdAndDelete(postId);
+
+//     res.status(200).json({ success: true, message: 'Post deleted successfully' });
+//   } catch (error) {
+//     console.error('Delete post error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to delete post',
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GIVE RESPECT (like)
+// // ─────────────────────────────────────────
+// export const giveRespect = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const post = await Post.findById(postId);
+
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     // Defensive: ensure respects is array
+//     if (!Array.isArray(post.respects)) {
+//       post.respects = [];
+//     }
+
+//     const alreadyRespected = post.respects.some(
+//       (r) => r.toString() === userId.toString()
+//     );
+
+//     let newRespects;
+//     if (alreadyRespected) {
+//       newRespects = post.respects.filter(
+//         (r) => r.toString() !== userId.toString()
+//       );
+//     } else {
+//       newRespects = [...post.respects, userId];
+//     }
+
+//     // TRADEOFF: using updateOne deliberately skips full-document validation
+//     // (the `save()` path would reject a partially-invalid doc). This keeps
+//     // the write fast and avoids validation errors on existing posts, but it
+//     // also means any future required-field additions to the Post schema
+//     // will NOT be enforced on this write path. If Post ever gains new
+//     // required fields, revisit this to use findByIdAndUpdate + runValidators.
+//     await Post.updateOne(
+//       { _id: postId },
+//       { $set: { respects: newRespects } }
+//     );
+
+//     // Notification logic...
+//     if (!alreadyRespected && post.user.toString() !== userId.toString()) {
+//       try {
+//         await Notification.create({
+//           recipient: post.user,
+//           sender: userId,
+//           type: 'respect',
+//           workout: post._id,
+//         });
+//       } catch (notifErr) {
+//         console.error('Failed to create respect notification:', notifErr);
+//       }
+//     }
+
+//     res.json({
+//       success: true,
+//       respected: !alreadyRespected,
+//       respectCount: newRespects.length,
+//     });
+//   } catch (error) {
+//     console.error('Give respect error:', error);
+//     res.status(500).json({ message: 'Failed to give respect' });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GET RESPECTS (who liked this post)
+// // ─────────────────────────────────────────
+// export const getRespects = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const currentUserId = req.user._id.toString();
+
+//     const post = await Post.findById(postId).populate(
+//       'respects',
+//       'name handle avatar bio followers'
+//     );
+
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     // ── DEFENSIVE: handle undefined respects ──
+//     const respects = post.respects || [];
+
+//     const users = respects.map((u) => ({
+//       id: u._id,
+//       name: u.name,
+//       handle: `@${u.handle}`,
+//       avatar: u.avatar,
+//       bio: u.bio,
+//       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
+//     }));
+
+//     res.json({ users });
+//   } catch (error) {
+//     console.error('Get respects error:', error);
+//     res.status(500).json({ message: 'Failed to fetch respects' });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // ADD COMMENT
+// // ─────────────────────────────────────────
+// export const addComment = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const { content, parentComment } = req.body;
+//     const userId = req.user._id;
+
+//     if (!content || content.trim().length === 0) {
+//       return res.status(400).json({ success: false, message: 'Comment content is required' });
+//     }
+
+//     const post = await Post.findById(postId);
+//     if (!post) {
+//       return res.status(404).json({ success: false, message: 'Post not found' });
+//     }
+
+//     let parent = null;
+//     if (parentComment) {
+//       parent = await Comment.findById(parentComment);
+//       if (!parent || parent.post.toString() !== postId) {
+//         return res.status(400).json({ success: false, message: 'Invalid parent comment' });
+//       }
+//       // Keep threads one level deep: replying to a reply attaches to that
+//       // reply's top-level parent instead of nesting further
+//       if (parent.parentComment) {
+//         parent = await Comment.findById(parent.parentComment);
+//       }
+//     }
+
+//     const comment = await Comment.create({
+//       post: postId,
+//       user: userId,
+//       content: content.trim(),
+//       parentComment: parent ? parent._id : null,
+//     });
+
+//     await comment.populate('user', 'name handle avatar');
+
+//     const commentObj = comment.toObject({ virtuals: true });
+//     commentObj.myReaction = null;
+//     commentObj.replies = [];
+
+//     // Notify whoever should be notified: the parent comment's author for a
+//     // reply, or the post owner for a top-level comment
+//     const notifyRecipient = parent ? parent.user : post.user;
+//     if (notifyRecipient.toString() !== userId.toString()) {
+//       try {
+//         await Notification.create({
+//           recipient: notifyRecipient,
+//           sender: userId,
+//           type: 'comment', // reuse existing type; add a 'reply' type to your Notification enum if you want to distinguish them in the UI
+//           workout: post._id,
+//           comment: comment.content,
+//            commentId: comment._id, 
+//         });
+//       } catch (notifErr) {
+//         console.error('Failed to create comment notification:', notifErr);
+//       }
+//     }
+
+//     res.status(201).json({ success: true, comment: commentObj });
+//   } catch (error) {
+//     console.error('Add comment error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to add comment',
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // GET COMMENTS
+// // ─────────────────────────────────────────
+// export const getComments = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const post = await Post.findById(postId);
+//     if (!post) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     const allComments = await Comment.find({ post: postId })
+//       .populate('user', 'name handle avatar')
+//       .sort({ createdAt: 1 });
+
+//     const comments = buildCommentTree(allComments, userId);
+
+//     res.json({ success: true, comments });
+//   } catch (error) {
+//     console.error('Get comments error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to get comments',
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // DELETE COMMENT
+// // ─────────────────────────────────────────
+// export const deleteComment = async (req, res) => {
+//   try {
+//     const { commentId } = req.params;
+//     const userId = req.user._id;
+
+//     const comment = await Comment.findById(commentId);
+
+//     if (!comment) {
+//       return res.status(404).json({ message: 'Comment not found' });
+//     }
+
+//     if (comment.user.toString() !== userId.toString()) {
+//       return res.status(403).json({ message: 'You can only delete your own comments' });
+//     }
+
+//     // Remove any replies so they don't get orphaned pointing at a deleted parent
+//     await Comment.deleteMany({ parentComment: commentId });
+//     await Comment.findByIdAndDelete(commentId);
+
+//     res.json({ success: true, message: 'Comment deleted' });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to delete comment', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // UPDATE COMMENT
+// // ─────────────────────────────────────────
+// export const updateComment = async (req, res) => {
+//   try {
+//     const { commentId } = req.params;
+//     const { content } = req.body;
+//     const userId = req.user._id;
+
+//     if (!content || content.trim().length === 0) {
+//       return res.status(400).json({ message: 'Comment content is required' });
+//     }
+
+//     const comment = await Comment.findById(commentId);
+//     if (!comment) {
+//       return res.status(404).json({ message: 'Comment not found' });
+//     }
+
+//     if (comment.user.toString() !== userId.toString()) {
+//       return res.status(403).json({ message: 'You can only edit your own comments' });
+//     }
+
+//     comment.content = content.trim();
+//     await comment.save();
+
+//     const populatedComment = await comment.populate('user', 'name handle avatar');
+//     const commentObj = populatedComment.toObject({ virtuals: true });
+//     commentObj.myReaction = populatedComment.getUserReaction(userId);
+
+//     res.json({ success: true, comment: commentObj });
+//   } catch (error) {
+//     console.error('Update comment error:', error);
+//     res.status(500).json({ message: 'Failed to update comment', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // REACT TO COMMENT
+// // ─────────────────────────────────────────
+// export const reactToComment = async (req, res) => {
+//   try {
+//     const { commentId } = req.params;
+//     const { emoji } = req.body;
+//     const userId = req.user._id;
+
+//     if (!REACTION_EMOJIS.includes(emoji)) {
+//       return res.status(400).json({ message: 'Invalid reaction emoji' });
+//     }
+
+//     const comment = await Comment.findById(commentId);
+//     if (!comment) {
+//       return res.status(404).json({ message: 'Comment not found' });
+//     }
+
+//     const existingIndex = comment.reactions.findIndex(
+//       (r) => r.user.toString() === userId.toString()
+//     );
+
+//     let myReaction = emoji;
+
+//     if (existingIndex !== -1) {
+//       const existing = comment.reactions[existingIndex];
+//       if (existing.emoji === emoji) {
+//         comment.reactions.splice(existingIndex, 1);
+//         myReaction = null;
+//       } else {
+//         existing.emoji = emoji;
+//       }
+//     } else {
+//       comment.reactions.push({ user: userId, emoji });
+//     }
+
+//     await comment.save();
+
+//     res.json({ success: true, reactionSummary: comment.reactionSummary, myReaction });
+//   } catch (error) {
+//     console.error('React to comment error:', error);
+//     res.status(500).json({ message: 'Failed to react to comment', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // REPOST
+// // ─────────────────────────────────────────
+// export const repost = async (req, res) => {
+//   try {
+//     const { postId } = req.params;
+//     const userId = req.user._id;
+
+//     const originalPost = await Post.findById(postId);
+//     if (!originalPost) {
+//       return res.status(404).json({ message: 'Post not found' });
+//     }
+
+//     const alreadyReposted = await Post.findOne({
+//       user: userId,
+//       originalPost: postId,
+//       isRepost: true,
+//     });
+
+//     if (alreadyReposted) {
+//       await Post.findByIdAndDelete(alreadyReposted._id);
+//       return res.json({ success: true, reposted: false, message: 'Repost removed' });
+//     }
+
+//     const newRepost = await Post.create({
+//       user: userId,
+//       content: originalPost.content,
+//       isRepost: true,
+//       originalPost: postId,
+//       workout: originalPost.workout,
+//     });
+
+//     await newRepost.populate('user', 'name handle avatar');
+//     await newRepost.populate('originalPost');
+
+//     res.status(201).json({ success: true, reposted: true, post: newRepost });
+//   } catch (error) {
+//     res.status(500).json({ message: 'Failed to repost', error: error.message });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // SAVE / UNSAVE
+// // ─────────────────────────────────────────
+// export const savePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     if (!user.savedPosts.includes(req.params.postId)) {
+//       user.savedPosts.push(req.params.postId);
+//       await user.save();
+//     }
+//     res.json({ success: true, saved: true });
+//   } catch (err) {
+//     console.error('Save post error:', err);
+//     res.status(500).json({ message: 'Failed to save post' });
+//   }
+// };
+
+// export const unsavePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     user.savedPosts = user.savedPosts.filter(
+//       (id) => id.toString() !== req.params.postId
+//     );
+//     await user.save();
+//     res.json({ success: true, saved: false });
+//   } catch (err) {
+//     console.error('Unsave post error:', err);
+//     res.status(500).json({ message: 'Failed to unsave post' });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // HIDE / UNHIDE
+// // ─────────────────────────────────────────
+// export const hidePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     if (!user.hiddenPosts.includes(req.params.postId)) {
+//       user.hiddenPosts.push(req.params.postId);
+//       await user.save();
+//     }
+//     res.json({ success: true, hidden: true });
+//   } catch (err) {
+//     console.error('Hide post error:', err);
+//     res.status(500).json({ message: 'Failed to hide post' });
+//   }
+// };
+
+// export const unhidePost = async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id);
+//     user.hiddenPosts = user.hiddenPosts.filter(
+//       (id) => id.toString() !== req.params.postId
+//     );
+//     await user.save();
+//     res.json({ success: true, hidden: false });
+//   } catch (err) {
+//     console.error('Unhide post error:', err);
+//     res.status(500).json({ message: 'Failed to unhide post' });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // REPORT
+// // ─────────────────────────────────────────
+// export const reportPost = async (req, res) => {
+//   try {
+//     const { reason } = req.body;
+//     const report = new Report({
+//       post: req.params.postId,
+//       reporter: req.user._id,
+//       reason,
+//       status: 'pending',
+//       createdAt: new Date(),
+//     });
+//     await report.save();
+//     res.json({ success: true, message: 'Report submitted successfully' });
+//   } catch (err) {
+//     console.error('Report post error:', err);
+//     res.status(500).json({ message: 'Failed to submit report' });
+//   }
+// };
+
+// // ─────────────────────────────────────────
+// // SHARE TRACKING
+// // ─────────────────────────────────────────
+// export const trackShare = async (req, res) => {
+//   try {
+//     const post = await Post.findById(req.params.postId);
+//     if (!post) return res.status(404).json({ message: 'Post not found' });
+//     post.shareCount = (post.shareCount || 0) + 1;
+//     await post.save();
+//     res.json({ success: true, shareCount: post.shareCount });
+//   } catch (err) {
+//     console.error('Track share error:', err);
+//     res.status(500).json({ message: 'Failed to track share' });
+//   }
+// };
+
 import Post from '../models/Post.js';
 import User from '../models/User.js';
 import Comment, { REACTION_EMOJIS } from '../models/Comments.js';
@@ -29,10 +911,7 @@ export const createPost = async (req, res) => {
 
     await post.populate('user', 'name handle avatar');
 
-    res.status(201).json({
-      success: true,
-      post,
-    });
+    return res.created(post);
   } catch (error) {
     console.error('Create post error:', error);
     res.status(500).json({ message: 'Failed to create post', error: error.message });
@@ -125,14 +1004,10 @@ export const getFeed = async (req, res) => {
 
     const total = await Post.countDocuments(query);
 
-    res.json({
-      success: true,
-      posts: postsWithData,
-      pagination: {
-        page: parseInt(page),
-        pages: Math.ceil(total / parseInt(limit)),
-        total,
-      },
+    return res.paginated(postsWithData, {
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      total,
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to load feed', error: error.message });
@@ -223,14 +1098,11 @@ export const getPost = async (req, res) => {
       postObj.user.isOnline = showActiveStatus ? postObj.user.isOnline : false;
     }
 
-    res.json({
-      success: true,
-      post: {
-        ...postObj,
-        didRespect: post.didUserRespect(userId),
-        comments: commentsWithReactions,
-        commentCount: commentsWithReactions.length,
-      },
+    return res.success({
+      ...postObj,
+      didRespect: post.didUserRespect(userId),
+      comments: commentsWithReactions,
+      commentCount: commentsWithReactions.length,
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to get post', error: error.message });
@@ -315,15 +1187,11 @@ export const getUserPosts = async (req, res) => {
 
     const totalPosts = await Post.countDocuments(query);
 
-    res.json({
-      success: true,
-      posts: postsWithData,
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(totalPosts / parseInt(limit)),
-        totalPosts,
-        hasMore: skip + posts.length < totalPosts,
-      },
+    return res.paginated(postsWithData, {
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalPosts / parseInt(limit)),
+      totalPosts,
+      hasMore: skip + posts.length < totalPosts,
     });
   } catch (error) {
     console.error('Get user posts error:', error);
@@ -374,11 +1242,7 @@ export const updatePost = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    res.status(200).json({
-      success: true,
-      message: 'Post updated successfully',
-      post: updatedPost,
-    });
+    return res.success(updatedPost);
   } catch (error) {
     console.error('Update post error:', error);
     res.status(500).json({
@@ -413,7 +1277,7 @@ export const deletePost = async (req, res) => {
     await Comment.deleteMany({ post: postId });
     await Post.findByIdAndDelete(postId);
 
-    res.status(200).json({ success: true, message: 'Post deleted successfully' });
+    return res.noContent();
   } catch (error) {
     console.error('Delete post error:', error);
     res.status(500).json({
@@ -481,8 +1345,7 @@ export const giveRespect = async (req, res) => {
       }
     }
 
-    res.json({
-      success: true,
+    return res.success({
       respected: !alreadyRespected,
       respectCount: newRespects.length,
     });
@@ -521,7 +1384,7 @@ export const getRespects = async (req, res) => {
       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
     }));
 
-    res.json({ users });
+    return res.success(users);
   } catch (error) {
     console.error('Get respects error:', error);
     res.status(500).json({ message: 'Failed to fetch respects' });
@@ -583,13 +1446,14 @@ export const addComment = async (req, res) => {
           type: 'comment', // reuse existing type; add a 'reply' type to your Notification enum if you want to distinguish them in the UI
           workout: post._id,
           comment: comment.content,
+           commentId: comment._id, 
         });
       } catch (notifErr) {
         console.error('Failed to create comment notification:', notifErr);
       }
     }
 
-    res.status(201).json({ success: true, comment: commentObj });
+    return res.created(commentObj);
   } catch (error) {
     console.error('Add comment error:', error);
     res.status(500).json({
@@ -619,7 +1483,7 @@ export const getComments = async (req, res) => {
 
     const comments = buildCommentTree(allComments, userId);
 
-    res.json({ success: true, comments });
+    return res.success(comments);
   } catch (error) {
     console.error('Get comments error:', error);
     res.status(500).json({
@@ -652,7 +1516,7 @@ export const deleteComment = async (req, res) => {
     await Comment.deleteMany({ parentComment: commentId });
     await Comment.findByIdAndDelete(commentId);
 
-    res.json({ success: true, message: 'Comment deleted' });
+    return res.noContent();
   } catch (error) {
     res.status(500).json({ message: 'Failed to delete comment', error: error.message });
   }
@@ -687,7 +1551,7 @@ export const updateComment = async (req, res) => {
     const commentObj = populatedComment.toObject({ virtuals: true });
     commentObj.myReaction = populatedComment.getUserReaction(userId);
 
-    res.json({ success: true, comment: commentObj });
+    return res.success(commentObj);
   } catch (error) {
     console.error('Update comment error:', error);
     res.status(500).json({ message: 'Failed to update comment', error: error.message });
@@ -732,7 +1596,7 @@ export const reactToComment = async (req, res) => {
 
     await comment.save();
 
-    res.json({ success: true, reactionSummary: comment.reactionSummary, myReaction });
+    return res.success({ reactionSummary: comment.reactionSummary, myReaction });
   } catch (error) {
     console.error('React to comment error:', error);
     res.status(500).json({ message: 'Failed to react to comment', error: error.message });
@@ -760,7 +1624,7 @@ export const repost = async (req, res) => {
 
     if (alreadyReposted) {
       await Post.findByIdAndDelete(alreadyReposted._id);
-      return res.json({ success: true, reposted: false, message: 'Repost removed' });
+      return res.success({ reposted: false });
     }
 
     const newRepost = await Post.create({
@@ -774,7 +1638,7 @@ export const repost = async (req, res) => {
     await newRepost.populate('user', 'name handle avatar');
     await newRepost.populate('originalPost');
 
-    res.status(201).json({ success: true, reposted: true, post: newRepost });
+    return res.created({ reposted: true, post: newRepost });
   } catch (error) {
     res.status(500).json({ message: 'Failed to repost', error: error.message });
   }
@@ -790,7 +1654,7 @@ export const savePost = async (req, res) => {
       user.savedPosts.push(req.params.postId);
       await user.save();
     }
-    res.json({ success: true, saved: true });
+    return res.success({ saved: true });
   } catch (err) {
     console.error('Save post error:', err);
     res.status(500).json({ message: 'Failed to save post' });
@@ -804,7 +1668,7 @@ export const unsavePost = async (req, res) => {
       (id) => id.toString() !== req.params.postId
     );
     await user.save();
-    res.json({ success: true, saved: false });
+    return res.success({ saved: false });
   } catch (err) {
     console.error('Unsave post error:', err);
     res.status(500).json({ message: 'Failed to unsave post' });
@@ -821,7 +1685,7 @@ export const hidePost = async (req, res) => {
       user.hiddenPosts.push(req.params.postId);
       await user.save();
     }
-    res.json({ success: true, hidden: true });
+    return res.success({ hidden: true });
   } catch (err) {
     console.error('Hide post error:', err);
     res.status(500).json({ message: 'Failed to hide post' });
@@ -835,7 +1699,7 @@ export const unhidePost = async (req, res) => {
       (id) => id.toString() !== req.params.postId
     );
     await user.save();
-    res.json({ success: true, hidden: false });
+    return res.success({ hidden: false });
   } catch (err) {
     console.error('Unhide post error:', err);
     res.status(500).json({ message: 'Failed to unhide post' });
@@ -856,7 +1720,7 @@ export const reportPost = async (req, res) => {
       createdAt: new Date(),
     });
     await report.save();
-    res.json({ success: true, message: 'Report submitted successfully' });
+    return res.created(report);
   } catch (err) {
     console.error('Report post error:', err);
     res.status(500).json({ message: 'Failed to submit report' });
@@ -872,7 +1736,7 @@ export const trackShare = async (req, res) => {
     if (!post) return res.status(404).json({ message: 'Post not found' });
     post.shareCount = (post.shareCount || 0) + 1;
     await post.save();
-    res.json({ success: true, shareCount: post.shareCount });
+    return res.success({ shareCount: post.shareCount });
   } catch (err) {
     console.error('Track share error:', err);
     res.status(500).json({ message: 'Failed to track share' });

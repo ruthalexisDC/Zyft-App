@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { API_ORIGIN } from "../config";
+import api from "../api/axios";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-//const API_URL = "http://localhost:5000";
-const API_URL = API_ORIGIN;
 
 const TEMPLATES = {
   PPL: ["Push", "Pull", "Legs", "Rest", "Push", "Pull", "Rest"],
@@ -36,12 +33,7 @@ const WorkoutSplitModal = ({ isOpen, onClose, userId, onSave }) => {
 
     const fetchSplit = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const res = await axios.get(`${API_URL}/api/users/${userId}/split`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const res = await api.get(`/users/${userId}/split`);
         if (res.data.split) {
           setSplit(res.data.split);
           const match = Object.entries(TEMPLATES).find(
@@ -85,16 +77,7 @@ const WorkoutSplitModal = ({ isOpen, onClose, userId, onSave }) => {
     setSaved(false);
 
     try {
-      const token = localStorage.getItem("token");
-      const res = await axios.put(
-        `${API_URL}/api/users/${userId}/split`,
-        { split },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const res = await api.put(`/users/${userId}/split`, { split });
       setSaved(true);
       onSave?.(res.data);
       setTimeout(() => {

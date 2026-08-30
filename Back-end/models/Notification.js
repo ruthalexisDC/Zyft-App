@@ -40,6 +40,12 @@ const notificationSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
+
+  commentId: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Comment",
+  default: null,
+},
     // For follow notifications - store the follower's ID for "Follow back"
     followBackUserId: {
       type: mongoose.Schema.Types.ObjectId,

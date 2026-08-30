@@ -1,8 +1,23 @@
-// Back-end/utils/generateToken.js
-import jwt from 'jsonwebtoken';
+// utils/generateToken.js
 
-const generateToken = (userId) => {
-  return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
+import jwt from "jsonwebtoken";
+
+export const generateAccessToken = (userId) => {
+  return jwt.sign(
+    { userId: userId.toString() },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "15m",
+    }
+  );
 };
 
-export default generateToken;
+export const generateRefreshToken = (userId) => {
+  return jwt.sign(
+    { userId: userId.toString() },
+    process.env.REFRESH_TOKEN_SECRET,
+    {
+      expiresIn: "30d",
+    }
+  );
+};

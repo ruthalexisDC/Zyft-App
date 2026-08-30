@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import axios from "axios";
+import api from "../api/axios";
 import { useTranslation } from "react-i18next";
 import {
   ArrowLeft,
@@ -47,8 +47,8 @@ export default function AccountSettings() {
     const token = localStorage.getItem("token");
     if (!token) return;
 
-    axios
-      .get("/api/users/me", { headers: { Authorization: `Bearer ${token}` } })
+    api
+      .get("/users/me")
       .then((res) => {
         setIsPrivate(!!res.data.user?.isPrivate);
         setShowActiveStatus(res.data.user?.show_active_status !== false);
@@ -106,12 +106,7 @@ export default function AccountSettings() {
     setIsPrivate(next);
     setPrivacyLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const { data } = await axios.patch(
-        "/api/users/privacy",
-        { isPrivate: next },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const { data } = await api.patch("/users/privacy", { isPrivate: next });
       setIsPrivate(data.isPrivate);
       showToast(
         data.isPrivate ? t("toast.privacyPrivate") : t("toast.privacyPublic"),
@@ -132,12 +127,9 @@ export default function AccountSettings() {
     setShowActiveStatus(next);
     setActiveStatusLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const { data } = await axios.patch(
-        "/api/users/active-status",
-        { showActiveStatus: next },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const { data } = await api.patch("/users/active-status", {
+        showActiveStatus: next,
+      });
       setShowActiveStatus(data.showActiveStatus);
       // ── Sync back to AuthContext + localStorage so FeedPostCard's
       //    viewer.show_active_status check reflects the change immediately

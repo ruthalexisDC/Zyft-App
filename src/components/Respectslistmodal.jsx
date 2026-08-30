@@ -2,11 +2,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { X, Loader2, Heart } from "lucide-react";
-import axios from "axios";
+import api from "../api/axios";
 
 /**
  * Modal listing the users who gave "respect" (liked) a post.
- * Requires the backend route: GET /api/posts/:postId/respects
+ * Requires the backend route: GET /api/v1/posts/:postId/respects
  */
 export default function RespectsListModal({ open, postId, onClose }) {
   const [users, setUsers] = useState([]);
@@ -20,12 +20,8 @@ export default function RespectsListModal({ open, postId, onClose }) {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem("token");
-
-    axios
-      .get(`/api/posts/${postId}/respects`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+    api
+      .get(`/posts/${postId}/respects`)
       .then((res) => {
         if (!cancelled) setUsers(res.data.users || []);
       })

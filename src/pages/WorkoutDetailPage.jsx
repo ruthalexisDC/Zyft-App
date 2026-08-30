@@ -16,11 +16,8 @@ import {
   BookmarkCheck,
   Loader2,
 } from "lucide-react";
-import axios from "axios";
-import { API_ORIGIN } from "../config";
+import api from "../api/axios";
 import { summarizeSets } from "../utils/exerciseDisplay";
-
-const API_URL = API_ORIGIN;
 
 // ─── Difficulty color map ──────────────────────────────────
 const DIFFICULTY_COLORS = {
@@ -159,22 +156,14 @@ export default function WorkoutDetailPage() {
   useEffect(() => {
     const fetchWorkout = async () => {
       try {
-        const token = localStorage.getItem("token");
         let res;
 
         // Try by workout ID first
         try {
-          res = await axios.get(`${API_URL}/api/workouts/${workoutId}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
+          res = await api.get(`/workouts/${workoutId}`);
         } catch {
           // Fallback: try by post ID
-          res = await axios.get(
-            `${API_URL}/api/workouts/by-post/${workoutId}`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            },
-          );
+          res = await api.get(`/workouts/by-post/${workoutId}`);
         }
 
         const data = res.data.workout || res.data;

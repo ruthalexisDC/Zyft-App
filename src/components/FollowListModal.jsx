@@ -2,15 +2,15 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { X, Loader2 } from "lucide-react";
-import axios from "axios";
+import api from "../api/axios";
 
 /**
  * Modal listing a user's followers or following.
  * Matches Profile.jsx's dark theme (#0a0a0a / #13131f / purple accents).
  *
  * Requires the backend routes in routes/users.js:
- *   GET /api/users/id/:id/followers
- *   GET /api/users/id/:id/following
+ *   GET /api/v1/users/id/:id/followers
+ *   GET /api/v1/users/id/:id/following
  */
 export default function FollowListModal({ open, type, userId, onClose }) {
   const [users, setUsers] = useState([]);
@@ -24,12 +24,8 @@ export default function FollowListModal({ open, type, userId, onClose }) {
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem("token");
-
-    axios
-      .get(`/api/users/id/${userId}/${type}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+    api
+      .get(`/users/id/${userId}/${type}`)
       .then((res) => {
         if (!cancelled) setUsers(res.data.users || []);
       })

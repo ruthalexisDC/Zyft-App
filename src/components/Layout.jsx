@@ -2,19 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { Outlet, NavLink, useLocation } from "react-router-dom";
 import { Home, Compass, Plus, PersonStanding, User } from "lucide-react";
 import VerifyEmailBanner from "./VerifyEmailBanner";
-import { API_ORIGIN } from "../config";
-
-const API_URL = API_ORIGIN;
+import api from "../api/axios";
 
 async function fetchUnreadCount() {
   try {
     const token = localStorage.getItem("token");
     if (!token) return 0;
-    const res = await fetch(`${API_URL}/api/notifications/unread-count`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) return 0;
-    const data = await res.json();
+    const { data } = await api.get("/notifications/unread-count");
     // Handles { count: 4 } or { unreadCount: 4 } — adjust if your backend differs
     return data.count ?? data.unreadCount ?? 0;
   } catch {

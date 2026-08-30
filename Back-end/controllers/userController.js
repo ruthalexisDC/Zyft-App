@@ -1,8 +1,11 @@
-import User from '../models/User.js';
-import Post from '../models/Post.js';
-import Workout from '../models/Workout.js';
-import Comment from '../models/Comments.js';
-import cloudinary from '../utils/cloudinary.js';
+import User from "../models/User.js";
+import Post from "../models/Post.js";
+import Workout from "../models/Workout.js";
+import Comment from "../models/Comments.js";
+import cloudinary from "../utils/cloudinary.js";
+import transporter from "../config/email.js";
+import crypto from "crypto";
+
 
 // Get user profile by ID
 export const getUserProfileById = async (req, res) => {
@@ -225,5 +228,147 @@ export const deleteAccount = async (req, res) => {
   } catch (error) {
     console.error('Delete account error:', error);
     res.status(500).json({ message: 'Failed to delete account', error: error.message });
+  }
+};
+// Send email verification
+export const requestEmailVerification = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is already verified",
+      });
+    }
+
+    // Create verification token
+    const verificationToken = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    // Save only the hashed token in MongoDB
+    user.emailVerifyToken = crypto
+      .createHash("sha256")
+      .update(verificationToken)
+      .digest("hex");
+
+    // Token expires after 1 hour
+    user.emailVerifyExpires = new Date(
+      Date.now() + 60 * 60 * 1000
+    );
+
+    await user.save({ validateBeforeSave: false });
+
+    const verificationUrl =
+      `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
+
+    await transporter.sendMail({
+      from: {
+        name: "Zyft",
+        address: process.env.EMAIL_USER,
+      },
+      to: user.email,
+      subject: "Verify your Zyft account",
+      html: `
+        <h1>Welcome to Zyft!</h1>
+
+        <p>Please verify your email address by clicking the button below.</p>
+
+        <p>
+          <a
+            href="${verificationUrl}"
+            style="
+              display: inline-block;
+              padding: 12px 20px;
+              background-color: #FF6B4A;
+              color: white;
+              text-decoration: none;
+              border-radius: 6px;
+            "
+          >
+            Verify Email
+          </a>
+        </p>
+
+        <p>This link will expire in 1 hour.</p>
+
+        <p>If you did not create a Zyft account, you can ignore this email.</p>
+      `,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Verification email sent successfully",
+    });
+
+  } catch (error) {
+    console.error("Verification email error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send verification email",
+      error: error.message,
+    });
+  }
+};
+// Confirm email verification
+export const confirmEmailVerification = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "Verification token is required",
+      });
+    }
+
+    // Hash the token received from the URL
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      emailVerifyToken: hashedToken,
+      emailVerifyExpires: {
+        $gt: new Date(),
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired verification token",
+      });
+    }
+
+    user.isVerified = true;
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Email verified successfully",
+    });
+
+  } catch (error) {
+    console.error("Email confirmation error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Email verification failed",
+      error: error.message,
+    });
   }
 };

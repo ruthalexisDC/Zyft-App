@@ -1,7 +1,7 @@
 // src/pages/NotificationSettings.jsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+import api from "../api/axios";
 import {
   ArrowLeft,
   ThumbsUp,
@@ -64,11 +64,8 @@ export default function NotificationSettings() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    axios
-      .get("/api/users/notification-preferences", {
-        headers: { Authorization: `Bearer ${token}` },
-      })
+    api
+      .get("/users/notification-preferences")
       .then((res) => setPreferences(res.data.preferences))
       .catch((err) => {
         console.error("Failed to load notification preferences:", err);
@@ -83,12 +80,9 @@ export default function NotificationSettings() {
     setSavingKey(key);
 
     try {
-      const token = localStorage.getItem("token");
-      const { data } = await axios.patch(
-        "/api/users/notification-preferences",
-        { [key]: next },
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
+      const { data } = await api.patch("/users/notification-preferences", {
+        [key]: next,
+      });
       setPreferences(data.preferences);
     } catch (err) {
       console.error("Failed to update notification preference:", err);

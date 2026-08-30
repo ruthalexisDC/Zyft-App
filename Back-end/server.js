@@ -6,9 +6,11 @@ import './config/loadEnv.js';
 
 import crypto from 'crypto';
 
+
 console.log('EMAIL_USER loaded:', process.env.EMAIL_USER ? 'yes' : 'MISSING');
 console.log('EMAIL_PASS loaded:', process.env.EMAIL_PASS ? 'yes' : 'MISSING');
 
+import errorHandler from "./middleware/ErrorHandler.js";
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -19,6 +21,10 @@ import passport, { initPassport } from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer } from 'socket.io';
 import helmet from 'helmet';
+import cookieParser from "cookie-parser";
+import { sendError } from "./utils/apiResponse.js";
+import responseFormatter from './middleware/responseFormatter.js';
+
 
 // Routes
 import authRoutes          from './routes/authRoutes.js';
@@ -39,6 +45,15 @@ console.log('GOOGLE_CLIENT_ID:',   process.env.GOOGLE_CLIENT_ID   ? '✓' : '✗
 console.log('GOOGLE_CLIENT_SECRET:',process.env.GOOGLE_CLIENT_SECRET ? '✓' : '✗ MISSING');
 console.log('SESSION_SECRET:',     process.env.SESSION_SECRET     ? '✓' : '✗ MISSING');
 console.log('MONGODB_URI:',        process.env.MONGODB_URI        ? '✓' : '✗ MISSING');
+
+console.log(
+  "REFRESH_TOKEN_SECRET:",
+  process.env.REFRESH_TOKEN_SECRET ? "✓ LOADED" : "✗ MISSING"
+);
+console.log(
+  "REFRESH_TOKEN_SECRET length:",
+  process.env.REFRESH_TOKEN_SECRET?.length || 0
+);
 
 // OAuth strategies (Google/Facebook) are constructed inside initPassport()
 // so they see fully-loaded env vars — construction order is explicit here
@@ -78,6 +93,7 @@ if (!sessionSecret) {
   console.warn('⚠ SESSION_SECRET not set — using a random dev-only secret (sessions will not persist across restarts).');
 }
 
+
 // Render (and most PaaS hosts) sit behind a reverse proxy that terminates
 // TLS; without this, Express sees every request as plain HTTP and
 // `cookie.secure: true` below would silently drop the session cookie.
@@ -100,6 +116,8 @@ app.use(cors({
 }));
 
 app.use(express.json());
+app.use(responseFormatter);   
+app.use(cookieParser());
 
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -126,13 +144,24 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 
-// Mount routes — each prefix used exactly once
-app.use('/api/auth',          authRoutes);
-app.use('/api/posts',         postRoutes);
-app.use('/api/users',         users);
-app.use('/api/stats',         statsRoutes);
-app.use('/api/workouts',      workoutRoutes);      // ← ONLY ONCE
-app.use('/api/notifications', notificationsRoutes);
+// Mount API v1 routes
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/posts', postRoutes);
+app.use('/api/v1/users', users);
+app.use('/api/v1/stats', statsRoutes);
+app.use('/api/v1/workouts', workoutRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
+
+// 404 handler
+app.use((req, res) => {
+  return sendError(res, {
+    statusCode: 404,
+    message: "Route not found",
+  });
+});
+
+// Global error handler
+app.use(errorHandler);
 
 // ── Socket.io: real-time presence ──
 // Socket.io needs a raw http.Server to attach to (not just the Express app),
