@@ -6,6 +6,12 @@ import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import { sendEmail } from '../utils/sendEmails.js';
+import { validate } from "../middleware/validate.js";
+import {
+  registerSchema,
+  loginSchema,
+  exchangeSchema,
+} from "../validators/authValidators.js";
 import {
   generateAccessToken,
   generateRefreshToken,
@@ -182,7 +188,7 @@ const authSuccess = async (req, res) => {
 // Exchange a one-time OAuth code for the real JWT. Called immediately by
 // the frontend after redirect — the code is deleted on first read whether
 // or not it was expired, so it can never be replayed.
-router.post('/exchange', (req, res) => {
+router.post('/exchange',  validate(exchangeSchema), (req, res) => {
   const { code } = req.body;
 
   if (!code) {
@@ -245,6 +251,7 @@ router.get('/facebook/callback',
 router.post(
   '/register/email',
   registerLimiter,
+   validate(registerSchema),
   async (req, res, next) => {
     try {
       const { name, email, password } = req.body;
@@ -368,7 +375,7 @@ return sendSuccess(res, {
 );
 
 
-router.post("/login", loginLimiter, async (req, res, next) => {
+router.post("/login", loginLimiter, validate(loginSchema),  async (req, res, next) => {
   try {
     const { email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();

@@ -9,12 +9,18 @@ const router = express.Router();
 // Lightweight count — used by the nav badge. Must be registered BEFORE /:id routes.
 router.get("/unread-count", auth, async (req, res) => {
   try {
-    const count = await Notification.countDocuments({
+
+
+    const countForUser = await Notification.countDocuments({
       recipient: req.user._id,
       read: false,
     });
-    res.json({ count });
+
+    res.json({
+  count: countForUser,
+});
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -57,14 +63,15 @@ router.get("/", auth, async (req, res) => {
         user: {
           id:          n.sender._id,
           name:        n.sender.name,
-          handle:      `@${n.sender.handle}`,
+          handle: n.sender.handle ? `@${n.sender.handle}` : null,
           initials:    initials(n.sender.name),
           avatar:      n.sender.avatar,
           isFollowing,
         },
         content:   actionText(n.type),
         target:    n.workout?.workout?.title ?? null,
-        workoutId: n.workout?._id ?? null,
+        // workoutId: n.workout?._id ?? null,
+        postId: n.workout?._id ?? null,
         comment:   n.comment ?? null,
       };
     });

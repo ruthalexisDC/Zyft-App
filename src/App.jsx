@@ -104,7 +104,7 @@ function App() {
 
               {/* SOCIAL POST — respects, comments, single image */}
               <Route
-                path="/workout/:workoutId"
+                path="/workout/:postId"
                 element={
                   <PrivateRoute>
                     <WorkoutPost key={user?._id || "guest"} />

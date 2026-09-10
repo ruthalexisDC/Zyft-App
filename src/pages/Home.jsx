@@ -309,7 +309,7 @@ export default function Home() {
     try {
       const { data } = await getPosts({ type, limit: 50 });
       if (signalCancelled?.()) return;
-      setPosts(data.posts ?? []);
+      setPosts(data.data ?? []);
     } catch (err) {
       if (signalCancelled?.()) return;
       console.error(err.response?.data?.message || err.message);

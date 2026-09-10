@@ -10,6 +10,8 @@ import {
   savePost, unsavePost, hidePost, unhidePost, reportPost, trackShare
 } from '../controllers/postController.js';
 import authenticate from '../middleware/authMiddleware.js';
+import { validate } from "../middleware/validate.js";
+import { PostWorkoutSchema } from "../validators/postValidators.js";
 
 const router = express.Router();
 
@@ -27,12 +29,12 @@ router.use(rateLimiter);
 router.get('/feed', getFeed);
 
 // ── Post CRUD ──
-router.post('/', createPost);
+router.post('/', validate(PostWorkoutSchema), createPost);
 router.get('/user/:userId', getUserPosts);
 
 // ── Comments ──
-router.get('/:postId/comments', getComments);
 router.post('/:postId/comments', addComment);
+router.get('/:postId/comments', getComments);
 router.delete('/:postId/comments/:commentId', deleteComment);
 router.put('/:postId/comments/:commentId', updateComment);
 router.post('/:postId/comments/:commentId/react', reactToComment); 

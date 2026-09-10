@@ -18,6 +18,10 @@ const auth = async (req, res, next) => {
 
     const token = authHeader.split(" ")[1];
 
+    console.log("AUTH:", req.method, req.originalUrl);
+console.log("TOKEN:", token);
+console.log("JWT_SECRET EXISTS:", !!process.env.JWT_SECRET);
+
     // Verify access token
     const decoded = jwt.verify(
       token,

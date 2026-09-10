@@ -10,21 +10,17 @@ import crypto from 'crypto';
 console.log('EMAIL_USER loaded:', process.env.EMAIL_USER ? 'yes' : 'MISSING');
 console.log('EMAIL_PASS loaded:', process.env.EMAIL_PASS ? 'yes' : 'MISSING');
 
-import errorHandler from "./middleware/ErrorHandler.js";
+import errorHandler, { notFoundHandler } from './middleware/ErrorHandler.js';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
-mongoose.set('returnDocument', 'after');
 import session from 'express-session';
 import passport, { initPassport } from './config/passport.js';
 import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer } from 'socket.io';
 import helmet from 'helmet';
 import cookieParser from "cookie-parser";
-import { sendError } from "./utils/apiResponse.js";
-import responseFormatter from './middleware/responseFormatter.js';
-
 
 // Routes
 import authRoutes          from './routes/authRoutes.js';
@@ -116,7 +112,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use(responseFormatter);   
 app.use(cookieParser());
 
 const isProduction = process.env.NODE_ENV === 'production';
@@ -152,16 +147,12 @@ app.use('/api/v1/stats', statsRoutes);
 app.use('/api/v1/workouts', workoutRoutes);
 app.use('/api/v1/notifications', notificationsRoutes);
 
-// 404 handler
-app.use((req, res) => {
-  return sendError(res, {
-    statusCode: 404,
-    message: "Route not found",
-  });
-});
-
-// Global error handler
-app.use(errorHandler);
+// These two must come LAST, in this order, after every route above —
+// anything mounted after them is unreachable, since notFoundHandler
+// matches whatever request made it this far without a route claiming it.
+app.use(notFoundHandler); // catches unmatched routes → 404
+app.use(errorHandler);    // catches everything passed to next(err) or thrown
+                           // inside an asyncHandler-wrapped controller
 
 // ── Socket.io: real-time presence ──
 // Socket.io needs a raw http.Server to attach to (not just the Express app),

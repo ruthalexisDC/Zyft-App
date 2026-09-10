@@ -153,21 +153,53 @@ export default function WorkoutDetailPage() {
   const [showShareToast, setShowShareToast] = useState(false);
 
   // Fetch real workout data from backend with fallback
+  // useEffect(() => {
+  //   const fetchWorkout = async () => {
+  //     try {
+  //       let res;
+
+  //       // Try by workout ID first
+  //       try {
+  //         res = await api.get(`/workouts/${workoutId}`);
+  //       } catch {
+  //         // Fallback: try by post ID
+  //         res = await api.get(`/workouts/by-post/${workoutId}`);
+  //       }
+
+  //       const data = res.data.workout || res.data;
+  //       setWorkout(data);
+  //       setExercises(
+  //         data.exercises?.map((e, i) => ({
+  //           ...e,
+  //           id: e._id || e.id || i + 1,
+  //           completed: false,
+  //         })) || [],
+  //       );
+  //     } catch (err) {
+  //       console.error("Failed to fetch workout:", err);
+  //       setError("Failed to load workout");
+  //     } finally {
+  //       setLoading(false);
+  //     }
+  //   };
+
+  //   if (workoutId) fetchWorkout();
+  // }, [workoutId]);
+
   useEffect(() => {
     const fetchWorkout = async () => {
-      try {
-        let res;
+      console.log("WORKOUT ID FROM URL:", workoutId);
+      console.log("REQUEST URL:", `/workouts/${workoutId}`);
 
-        // Try by workout ID first
-        try {
-          res = await api.get(`/workouts/${workoutId}`);
-        } catch {
-          // Fallback: try by post ID
-          res = await api.get(`/workouts/by-post/${workoutId}`);
-        }
+      try {
+        const res = await api.get(`/workouts/${workoutId}`);
+
+        console.log("WORKOUT API RESPONSE:", res.data);
 
         const data = res.data.workout || res.data;
+
         setWorkout(data);
+
         setExercises(
           data.exercises?.map((e, i) => ({
             ...e,
@@ -176,14 +208,19 @@ export default function WorkoutDetailPage() {
           })) || [],
         );
       } catch (err) {
-        console.error("Failed to fetch workout:", err);
+        console.error("WORKOUT API ERROR:", err);
+        console.error("STATUS:", err.response?.status);
+        console.error("RESPONSE:", err.response?.data);
+
         setError("Failed to load workout");
       } finally {
         setLoading(false);
       }
     };
 
-    if (workoutId) fetchWorkout();
+    if (workoutId) {
+      fetchWorkout();
+    }
   }, [workoutId]);
 
   const completedCount = exercises.filter((e) => e.completed).length;

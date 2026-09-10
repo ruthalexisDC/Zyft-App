@@ -7,7 +7,7 @@ import { getPost, updatePost, deletePost, respectPost } from "../api/posts";
 import FeedPostCard from "../components/FeedPostCard";
 
 export default function WorkoutPost() {
-  const { workoutId } = useParams();
+  const { postId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
@@ -26,8 +26,8 @@ export default function WorkoutPost() {
     setLoading(true);
     setNotFound(false);
     try {
-      const { data } = await getPost(workoutId);
-      const fetched = data?.post ?? data;
+      const { data } = await getPost(postId);
+      const fetched = data?.data ?? data?.post ?? data;
       if (!fetched || !fetched._id) {
         setNotFound(true);
       } else {
@@ -39,7 +39,7 @@ export default function WorkoutPost() {
     } finally {
       setLoading(false);
     }
-  }, [workoutId]);
+  }, [postId]);
 
   useEffect(() => {
     fetchPost();

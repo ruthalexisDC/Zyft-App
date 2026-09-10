@@ -5,6 +5,12 @@ import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
 import api from "../api/axios";
 import {
+  getNotification,
+  markNotificationAsRead,
+  markAllNotificationAsRead,
+  deleteNotification,
+} from "../api/notifications";
+import {
   ThumbsUp,
   MessageCircle,
   UserPlus,
@@ -86,10 +92,26 @@ const NotificationCard = ({
   const { t } = useTranslation("activity");
   const isSystem = notif.type === "streak" || notif.type === "welcome";
 
+  // const goToWorkout = (openReply = false) => {
+  //   onMarkRead(notif.id);
+  //   if (notif.workoutId) {
+  //     navigate(`/workout/${notif.workoutId}`, {
+  //       state: {
+  //         focusComment: notif.commentId ?? null,
+  //         openReply,
+  //       },
+  //     });
+  //   }
+  // };
   const goToWorkout = (openReply = false) => {
+    console.log("VIEW POST CLICKED");
+    console.log("Notification:", notif);
+    console.log("Post ID:", notif.postId);
+
     onMarkRead(notif.id);
-    if (notif.workoutId) {
-      navigate(`/workout/${notif.workoutId}`, {
+
+    if (notif.postId) {
+      navigate(`/workout/${notif.postId}`, {
         state: {
           focusComment: notif.commentId ?? null,
           openReply,
@@ -107,8 +129,8 @@ const NotificationCard = ({
 
   const handleReply = () => {
     onMarkRead(notif.id);
-    if (notif.workoutId) {
-      navigate(`/workout/${notif.workoutId}`, {
+    if (notif.postId) {
+      navigate(`/workout/${notif.postId}`, {
         state: { focusComment: notif.commentId, openReply: true },
       });
     }
@@ -234,7 +256,7 @@ const NotificationCard = ({
           )}
 
           {/* Respect action */}
-          {notif.type === "respect" && notif.workoutId && (
+          {notif.type === "respect" && notif.postId && (
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => goToWorkout(false)}
@@ -332,37 +354,85 @@ export default function Activity() {
   const myInitial = myName ? myName.charAt(0).toUpperCase() : "U";
 
   // Fetch notifications from API
-  const fetchNotifications = useCallback(async () => {
-    try {
-      const res = await api.get("/notifications");
-      setNotifications(res.data);
+  // const fetchNotifications = useCallback(async () => {
+  //   try {
+  //     const data = await getNotifications();
 
-      setFollowingMap((prev) => {
-        const next = { ...prev };
-        res.data.forEach((n) => {
-          if (n.type === "follow" && n.user?.id && !(n.user.id in next)) {
-            next[n.user.id] = !!n.user.isFollowing;
-          }
-        });
-        return next;
-      });
-    } catch (err) {
-      console.error("Failed to fetch notifications:", err);
-      setError(t("errors.loadFailed"));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [t]);
+  //     setNotifications(data);
 
+  //     setFollowingMap((prev) => {
+  //       const next = { ...prev };
+
+  //       data.forEach((n) => {
+  //         if (n.type === "follow" && n.user?.id && !(n.user.id in next)) {
+  //           next[n.user.id] = !!n.user.isFollowing;
+  //         }
+  //       });
+
+  //       return next;
+  //     });
+  //   } catch (err) {
+  //     console.error("Failed to fetch notifications:", err);
+  //     setError(t("errors.loadFailed"));
+  //   } finally {
+  //     setIsLoading(false);
+  //   }
+  // }, [t]);
+
+  // useEffect(() => {
+  //   fetchNotifications();
+  // }, [fetchNotifications]);
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    let cancelled = false;
+
+    const loadNotifications = async () => {
+      try {
+        const data = await getNotification();
+
+        console.log("NOTIFICATIONS:", data);
+
+        if (cancelled) return;
+
+        setNotifications(data);
+
+        setFollowingMap((prev) => {
+          const next = { ...prev };
+
+          data.forEach((n) => {
+            if (n.type === "follow" && n.user?.id && !(n.user.id in next)) {
+              next[n.user.id] = !!n.user.isFollowing;
+            }
+          });
+
+          console.log("FOLLOWING MAP:", next);
+
+          return next;
+        });
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error("Failed to fetch notifications:", err);
+        setError(t("errors.loadFailed"));
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadNotifications();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [t]);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   const markAllRead = useCallback(async () => {
     try {
-      await api.patch("/notifications/read-all", {});
+      await markAllNotificationAsRead();
+
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     } catch (err) {
       console.error("Failed to mark all read:", err);
@@ -371,7 +441,8 @@ export default function Activity() {
 
   const markRead = useCallback(async (id) => {
     try {
-      await api.patch(`/notifications/${id}/read`, {});
+      await markNotificationAsRead(id);
+
       setNotifications((prev) =>
         prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
       );
@@ -382,7 +453,8 @@ export default function Activity() {
 
   const dismiss = useCallback(async (id) => {
     try {
-      await api.delete(`/notifications/${id}`);
+      await deleteNotification(id);
+
       setNotifications((prev) => prev.filter((n) => n.id !== id));
     } catch (err) {
       console.error("Failed to dismiss:", err);

@@ -8,6 +8,9 @@ import Notification from "../models/Notification.js";
 import Workout from "../models/Workout.js";
 import Post from "../models/Post.js";
 import Comment from "../models/Comments.js";
+import { validate } from "../middleware/validate.js";
+import { setUserGoalSchema } from "../validators/goalValidators.js";
+import { updateProfileSchema, updatePrivacySchema, updateActiveStatusSchema, updateNotificationPreferencesSchema } from "../validators/userValidators.js";
 
 import {
   getUserProfileById,
@@ -52,12 +55,41 @@ function timeAgo(date) {
 // ═══════════════════════════════════════════════════════
 
 // GET /api/users/me - Get current user
+// router.get("/me", auth, async (req, res) => {
+//   try {
+//     const user = await User.findById(req.user._id).select("-password");
+//     res.json({ user });
+//   } catch (err) {
+//     res.status(500).json({ message: "Failed to fetch user" });
+//   }
+// });
+
 router.get("/me", auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
-    res.json({ user });
+    const user = await User.findById(req.user._id)
+      .select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile retrieved successfully",
+      data: {
+        user,
+      },
+    });
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch user" });
+    console.error("Get current user error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch user",
+    });
   }
 });
 
@@ -76,7 +108,7 @@ router.post("/heartbeat", auth, async (req, res) => {
 
 // PATCH /api/users/active-status — toggle whether this user's active
 // status is visible to others (show_active_status). Default true.
-router.patch("/active-status", auth, async (req, res) => {
+router.patch("/active-status", auth, validate(updateActiveStatusSchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -94,10 +126,10 @@ router.patch("/active-status", auth, async (req, res) => {
 });
 
 // PATCH /api/users/goal
-router.patch("/goal", auth, setUserGoal);
+router.patch("/goal", auth, validate(setUserGoalSchema), setUserGoal);
 
 // PATCH /api/users/privacy — toggle or set private-account status
-router.patch("/privacy", auth, async (req, res) => {
+router.patch("/privacy", auth, validate(updatePrivacySchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -113,7 +145,7 @@ router.patch("/privacy", auth, async (req, res) => {
 });
 
 // GET /api/users/notification-preferences
-router.get("/notification-preferences", auth, async (req, res) => {
+router.get("/notification-preferences", auth, validate(updateNotificationPreferencesSchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("notificationPreferences");
     if (!user) return res.status(404).json({ message: "User not found" });
@@ -168,7 +200,7 @@ router.get("/suggested", auth, async (req, res) => {
 // PROFILE ROUTES
 // ═══════════════════════════════════════════════════════
 
-router.put("/profile", auth, updateProfile);
+router.put("/profile", auth, validate(updateProfileSchema), updateProfile);
 // multer's errors (file too large, wrong type) are thrown inside its own
 // middleware — without catching them here they'd surface as an unhandled
 // error / generic 500 instead of a clean 400 response.
@@ -291,7 +323,7 @@ router.get("/id/:id/followers", auth, async (req, res) => {
     const list = user.followers.map((u) => ({
       id: u._id,
       name: u.name,
-      handle: `@${u.handle}`,
+     handle: u.handle,
       avatar: u.avatar,
       bio: u.bio,
       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
@@ -318,7 +350,7 @@ router.get("/id/:id/following", auth, async (req, res) => {
     const list = user.following.map((u) => ({
       id: u._id,
       name: u.name,
-      handle: `@${u.handle}`,
+      handle: u.handle,
       avatar: u.avatar,
       bio: u.bio,
       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
@@ -410,7 +442,7 @@ router.get("/:handle", auth, async (req, res) => {
     res.json({
       id: user._id,
       name: user.name,
-      handle: `@${user.handle}`,
+     handle: user.handle,
       avatar: user.avatar,
       bio: user.bio,
       streakCount: user.streakCount,
@@ -611,7 +643,7 @@ router.get("/", auth, async (req, res) => {
       return {
         id: u._id,
         name: u.name,
-        handle: u.handle ? `@${u.handle}` : `@user${u._id.toString().slice(-4)}`,
+        handle: u.handle || `user${u._id.toString().slice(-4)}`,
         avatar: u.avatar,
         bio: u.bio || "Fitness enthusiast",
         streakCount: u.streakCount || 0,
@@ -635,18 +667,4 @@ router.get("/", auth, async (req, res) => {
 });
 
 
-router.post("/logout", async (req, res) => {
-  try {
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("Bearer ")) {
-      const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
-      await User.findByIdAndUpdate(decoded.userId, { $unset: { refreshToken: 1 } });
-    }
-  } catch (err) {
-    // Expired/invalid access token shouldn't block logout — clear the
-    // cookie regardless, the client is trying to end its session either way.
-  }
-  clearRefreshTokenCookie(res); // local version, defined near the top of this file
-  return sendSuccess(res, { statusCode: 200, message: "Logged out" });
-});
 export default router;

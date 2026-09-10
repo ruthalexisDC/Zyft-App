@@ -1,88 +1,207 @@
-// // models/Workout.js
-// import mongoose from "mongoose";
+// backend/models/Workout.js
 
-// const setSchema = new mongoose.Schema({
-//   reps: { type: Number, required: true, min: 1 },
-//   weight: { type: Number, default: 0, min: 0 },
-//   unit: { type: String, enum: ["kg", "lb"], default: "kg" },
-//   rpe: { type: Number, min: 1, max: 10 },  // Rate of Perceived Exertion (RPE)
-//   isWarmup: { type: Boolean, default: false },
-
-// }, {_id: false });  // Prevents Mongoose from creating an _id for each set
-
-// const exerciseSchema = new mongoose.Schema({
-//   name:   { type: String, required: true },
-//   muscleGroup: { type: String, default: '' },          // phase 2, exercise library
-//   sets:        { type: [setSchema], default: [] },
-// });
-
-// const commentSchema = new mongoose.Schema(
-//   {
-//     user:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-//     text:    { type: String, required: true, maxlength: 500 },
-//     likes:   [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-//   },
-//   { timestamps: true }
-// );
-
-// const workoutSchema = new mongoose.Schema({
-//   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-//   title: { type: String, required: true },
-//   notes: { type: String, default: "" },
-//   duration: { type: Number },
-//   caloriesBurned: { type: Number, default: 0 },  
-//   exercises: [exerciseSchema],
-//   imageUrl: { type: String, default: "" },  // ← MUST have this
-//   isPublic: { type: Boolean, default: true },
-//   respects: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-//   comments: [commentSchema],
-// }, { timestamps: true });
-
-// export default mongoose.model("Workout", workoutSchema);
-
-// models/Workout.js
 import mongoose from "mongoose";
+
+
+// ─────────────────────────────────────────
+// SET
+// ─────────────────────────────────────────
 
 const setSchema = new mongoose.Schema(
   {
-    reps:     { type: Number, required: true, min: 0 },
-    weight:   { type: Number, default: 0, min: 0 },
-    unit:     { type: String, enum: ["kg", "lb"], default: "kg" },
-    rpe:      { type: Number, min: 1, max: 10 },
-    isWarmup: { type: Boolean, default: false },
+    reps: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    weight: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    unit: {
+      type: String,
+      enum: ["kg", "lb"],
+      default: "kg",
+    },
+
+    rpe: {
+      type: Number,
+      min: 1,
+      max: 10,
+    },
+
+    isWarmup: {
+      type: Boolean,
+      default: false,
+    },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
+
+
+// ─────────────────────────────────────────
+// EXERCISE
+// ─────────────────────────────────────────
 
 const exerciseSchema = new mongoose.Schema(
   {
-    name:        { type: String, required: true },
-    muscleGroup: { type: String, default: "" },
-    sets:        { type: [setSchema], default: [] },
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    muscleGroup: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    sets: {
+      type: [setSchema],
+      default: [],
+    },
   },
-  { _id: false }
+  {
+    _id: false,
+  }
 );
+
+
+// ─────────────────────────────────────────
+// COMMENT
+// ─────────────────────────────────────────
 
 const commentSchema = new mongoose.Schema(
   {
-    user:    { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    text:    { type: String, required: true, maxlength: 500 },
-    likes:   [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    text: {
+      type: String,
+      required: true,
+      maxlength: 500,
+      trim: true,
+    },
+
+    likes: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-const workoutSchema = new mongoose.Schema({
-  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-  title: { type: String, required: true },
-  notes: { type: String, default: "" },
-  duration: { type: Number },
-  caloriesBurned: { type: Number, default: 0 },  
-  exercises: [exerciseSchema],
-  imageUrl: { type: String, default: "" },  // ← MUST have this
-  isPublic: { type: Boolean, default: true },
-  respects: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-  comments: [commentSchema],
-}, { timestamps: true });
 
-export default mongoose.model("Workout", workoutSchema);
+// ─────────────────────────────────────────
+// WORKOUT
+// ─────────────────────────────────────────
+
+const workoutSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+
+    title: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    notes: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    duration: {
+      type: Number,
+      min: 0,
+      default: 0,
+    },
+
+    caloriesBurned: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    exercises: {
+      type: [exerciseSchema],
+      default: [],
+    },
+
+    imageUrl: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    // ─────────────────────────────────────
+    // PRIVACY
+    // ─────────────────────────────────────
+
+    visibility: {
+      type: String,
+      enum: [
+        "private",
+        "followers",
+        "public",
+      ],
+      default: "private",
+      index: true,
+    },
+
+    respects: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+      },
+    ],
+
+    comments: {
+      type: [commentSchema],
+      default: [],
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+
+// ─────────────────────────────────────────
+// INDEXES
+// ─────────────────────────────────────────
+
+workoutSchema.index({
+  user: 1,
+  createdAt: -1,
+});
+
+workoutSchema.index({
+  visibility: 1,
+  createdAt: -1,
+});
+
+
+export default mongoose.model(
+  "Workout",
+  workoutSchema
+);

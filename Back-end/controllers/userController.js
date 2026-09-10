@@ -68,7 +68,7 @@ export const getUserPostsById = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('user', 'name handle avatar')
+       .populate('user', 'name handle avatar last_active_at isOnline show_active_status')
       .lean();
 
     const total = await Post.countDocuments({ user: id });

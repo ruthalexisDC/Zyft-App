@@ -9,8 +9,8 @@ import api from "../api/axios";
  * Matches Profile.jsx's dark theme (#0a0a0a / #13131f / purple accents).
  *
  * Requires the backend routes in routes/users.js:
- *   GET /api/v1/users/id/:id/followers
- *   GET /api/v1/users/id/:id/following
+ // Requires the backend route: GET /users/id/:id/followers
+ // GET /users/id/:id/following
  */
 export default function FollowListModal({ open, type, userId, onClose }) {
   const [users, setUsers] = useState([]);
