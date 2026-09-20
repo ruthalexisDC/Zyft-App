@@ -6,7 +6,7 @@ import api from "../api/axios";
 
 /**
  * Modal listing the users who gave "respect" (liked) a post.
- * Requires the backend route: GET /api/v1/posts/:postId/respects
+ // Requires the backend route: GET /posts/:postId/respects
  */
 export default function RespectsListModal({ open, postId, onClose }) {
   const [users, setUsers] = useState([]);

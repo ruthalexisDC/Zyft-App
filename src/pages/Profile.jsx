@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import WorkoutPostCard from "../components/WorkoutPostCard.jsx";
 import { useSocket } from "../context/SocketContext.jsx";
 import api from "../api/axios";
+import { getSavedPosts } from "../api/posts";
 import {
   Dumbbell,
   TrendingUp,
@@ -13,6 +14,7 @@ import {
   Settings,
   Zap,
   Loader2,
+  Bookmark,
 } from "lucide-react";
 import FollowListModal from "../components/FollowListModal.jsx";
 
@@ -202,6 +204,7 @@ export default function Profile() {
   const isOwnProfile = !paramUserId || paramUserId === currentUserId;
 
   const [posts, setPosts] = useState([]);
+  const [savedPosts, setSavedPosts] = useState([]);
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -228,6 +231,31 @@ export default function Profile() {
       setIsFollowing(profileData.isFollowing);
     }
   }, [profileData]);
+
+  // ─── Fetch saved posts ───
+  const fetchSavedPosts = useCallback(async () => {
+    if (!isOwnProfile) return;
+
+    try {
+      const response = await getSavedPosts({
+        page: 1,
+        limit: 20,
+      });
+
+      const saved = response.data?.data || response.data?.posts || [];
+
+      setSavedPosts(saved);
+    } catch (err) {
+      console.error("Failed to fetch saved posts:", err);
+      setSavedPosts([]);
+    }
+  }, [isOwnProfile]);
+
+  useEffect(() => {
+    if (activeTab === "Saved" && isOwnProfile) {
+      fetchSavedPosts();
+    }
+  }, [activeTab, isOwnProfile, fetchSavedPosts]);
 
   // ─── Check follow status when viewing another user's profile ───
   useEffect(() => {
@@ -406,17 +434,17 @@ export default function Profile() {
     try {
       const res = await api.post(`/posts/${postId}/respect`, {});
 
-      setPosts(
-        posts.map((post) =>
-          post._id === postId
-            ? {
-                ...post,
-                didRespect: res.data.respected,
-                respectCount: res.data.respectCount,
-              }
-            : post,
-        ),
-      );
+      const updatePost = (post) =>
+        post._id === postId
+          ? {
+              ...post,
+              didRespect: res.data.respected,
+              respectCount: res.data.respectCount,
+            }
+          : post;
+
+      setPosts((prev) => prev.map(updatePost));
+      setSavedPosts((prev) => prev.map(updatePost));
     } catch (err) {
       console.error("Respect failed:", err);
     }
@@ -769,6 +797,15 @@ export default function Profile() {
             label: t("tabs.post"),
             icon: <Grid size={16} />,
           },
+          ...(isOwnProfile
+            ? [
+                {
+                  key: "Saved",
+                  label: t("Saved Posts"),
+                  icon: <Bookmark size={16} />,
+                },
+              ]
+            : []),
           {
             key: "Progress",
             label: t("tabs.progress"),
@@ -789,6 +826,35 @@ export default function Profile() {
           </button>
         ))}
       </div>
+
+      {/* ── Saved Tab ── */}
+      {activeTab === "Saved" && isOwnProfile && (
+        <div className="space-y-3">
+          {savedPosts.length === 0 ? (
+            <div className="bg-[#13131f] rounded-2xl p-8 border border-white/5 text-center">
+              <Bookmark className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+
+              <p className="text-sm text-gray-500">
+                {t("noSavedPosts", "No saved posts yet.")}
+              </p>
+
+              <p className="text-xs text-gray-600 mt-1">
+                {t("savePostsHint", "Posts you save will appear here.")}
+              </p>
+            </div>
+          ) : (
+            savedPosts.map((post) => (
+              <WorkoutPostCard
+                key={post._id}
+                post={post}
+                onRespect={handleRespect}
+                getTimeAgo={getTimeAgo}
+                t={t}
+              />
+            ))
+          )}
+        </div>
+      )}
 
       {/* ── Tab Content ── */}
       {activeTab === "Post" && (

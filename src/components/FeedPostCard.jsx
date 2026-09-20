@@ -48,18 +48,17 @@ import { useSocket } from "../context/SocketContext.jsx";
 import { useAuth } from "../context/AuthContext.jsx";
 import { summarizeSets } from "../utils/exerciseDisplay";
 
-// ── Active status constants ──
-// A user is considered "online" if their last heartbeat was within this
-// window (matches the backend presence heartbeat interval).
-const ACTIVE_WINDOW_MS = 2 * 60 * 1000; // 2 min
-const ACTIVE_REFRESH_MS = 60 * 1000; // refresh "Active X ago" every 60s
+// ─────────────────────────────────────────────────────────────
+// Active status constants
+// ─────────────────────────────────────────────────────────────
 
-// Must match REACTION_EMOJIS in the backend Comment model — keep in sync.
+const ACTIVE_WINDOW_MS = 2 * 60 * 1000;
+const ACTIVE_REFRESH_MS = 60 * 1000;
+
+// Must match REACTION_EMOJIS in the backend Comment model
 const REACTION_EMOJIS = ["👍", "❤️", "😂", "😮"];
 
-// Internal report-reason keys — the VALUE sent to the backend stays a
-// stable English key; only the display label shown to the user is
-// translated via t(`feedpost:report.reasons.${key}`).
+// Internal report-reason keys
 const REPORT_REASON_KEYS = [
   "spam",
   "harassment",
@@ -68,10 +67,14 @@ const REPORT_REASON_KEYS = [
   "other",
 ];
 
-// ─── Toast ────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Toast
+// ─────────────────────────────────────────────────────────────
+
 function Toast({ message, type, onClose }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 3000);
+
     return () => clearTimeout(timer);
   }, [onClose]);
 
@@ -86,20 +89,27 @@ function Toast({ message, type, onClose }) {
       }`}
     >
       {type === "success" && <Check size={14} />}
+
       {type === "error" && <AlertTriangle size={14} />}
+
       {message}
     </div>
   );
 }
 
-// ─── Report Modal ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Report Modal
+// ─────────────────────────────────────────────────────────────
+
 function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
     if (!reason) return;
+
     setSubmitting(true);
+
     try {
       await onSubmit(reason);
       onClose();
@@ -117,6 +127,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
           <h3 className="text-sm font-semibold text-white">
             {t("feedpost:report.title")}
           </h3>
+
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-white transition-colors"
@@ -124,9 +135,11 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
             <X size={16} />
           </button>
         </div>
+
         <p className="text-xs text-gray-500 mb-3 line-clamp-1">
           "{postTitle || t("feedpost:report.untitledPost")}"
         </p>
+
         <div className="space-y-1.5 mb-4">
           {REPORT_REASON_KEYS.map((key) => (
             <button
@@ -142,6 +155,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
             </button>
           ))}
         </div>
+
         <div className="flex gap-2">
           <button
             onClick={onClose}
@@ -149,6 +163,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
           >
             {t("common:cancel")}
           </button>
+
           <button
             onClick={handleSubmit}
             disabled={!reason || submitting}
@@ -159,6 +174,7 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
             ) : (
               <Flag size={12} />
             )}
+
             {t("feedpost:report.submit")}
           </button>
         </div>
@@ -167,14 +183,91 @@ function ReportModal({ isOpen, onClose, onSubmit, postTitle, t }) {
   );
 }
 
-// ─── Image Preview Modal ──────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Delete Comment Modal
+// ─────────────────────────────────────────────────────────────
+
+function DeleteCommentModal({ isOpen, onClose, onConfirm, deleting, t }) {
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[75] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+      onClick={deleting ? undefined : onClose}
+    >
+      <div
+        className="w-full max-w-xs rounded-2xl border border-white/10 bg-[#1a1a2e] p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* TITLE */}
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white">Delete comment?</h3>
+
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="text-gray-500 transition-colors hover:text-white disabled:opacity-50"
+            aria-label="Close"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* MESSAGE */}
+        <p className="mb-5 text-xs leading-relaxed text-gray-400">
+          Are you sure you want to delete this comment? This action cannot be
+          undone.
+        </p>
+
+        {/* BUTTONS */}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="flex-1 rounded-xl bg-white/5 py-2.5 text-xs text-gray-400 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={deleting}
+            className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-red-500/80 py-2.5 text-xs text-white transition-colors hover:bg-red-500 disabled:bg-red-500/30"
+          >
+            {deleting ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Trash2 size={12} />
+            )}
+
+            {deleting ? "Deleting..." : "Delete"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Image Preview Modal
+// ─────────────────────────────────────────────────────────────
+
 function ImagePreviewModal({ src, alt, onClose, t }) {
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        onClose();
+      }
     };
+
     document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
+
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+    };
   }, [onClose]);
 
   if (!src) return null;
@@ -191,6 +284,7 @@ function ImagePreviewModal({ src, alt, onClose, t }) {
       >
         <X size={18} />
       </button>
+
       <img
         src={src}
         alt={alt}
@@ -201,7 +295,10 @@ function ImagePreviewModal({ src, alt, onClose, t }) {
   );
 }
 
-// ─── Avatar Component ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Avatar Component
+// ─────────────────────────────────────────────────────────────
+
 function UserAvatar({ user, size = 10, t, online }) {
   const { isUserOnline } = useSocket();
 
@@ -209,17 +306,17 @@ function UserAvatar({ user, size = 10, t, online }) {
     7: "w-7 h-7 text-[10px]",
     10: "w-10 h-10 text-sm",
   };
+
   const dotSize = size === 7 ? "w-2 h-2" : "w-2.5 h-2.5";
 
   const photo = user?.photo || user?.avatar;
+
   const initial = user?.name?.charAt(0)?.toUpperCase() || "?";
-  // Allow callers to pass an explicit `online` value (e.g. computed from
-  // last_active_at freshness). Falls back to the socket presence set for
-  // places like comments that don't compute active status.
+
   const isOnline = online !== undefined ? online : isUserOnline(user?._id);
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0  self-start">
       <div
         className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-[#8b5cf6] to-[#a78bfa] flex items-center justify-center font-bold overflow-hidden`}
       >
@@ -236,6 +333,7 @@ function UserAvatar({ user, size = 10, t, online }) {
           <span>{initial}</span>
         )}
       </div>
+
       {isOnline && (
         <div
           className={`absolute -bottom-0.5 -right-0.5 ${dotSize} bg-green-500 rounded-full border-2 border-[#13131f]`}
@@ -245,7 +343,10 @@ function UserAvatar({ user, size = 10, t, online }) {
   );
 }
 
-// ─── Comment Reactions Row ──
+// ─────────────────────────────────────────────────────────────
+// Comment Reactions Row
+// ─────────────────────────────────────────────────────────────
+
 function CommentReactions({
   comment,
   reactingCommentId,
@@ -260,8 +361,11 @@ function CommentReactions({
     <div className="flex items-center gap-1.5 mt-1 ml-1 flex-wrap">
       {REACTION_EMOJIS.map((emoji) => {
         const count = reactionSummary[emoji] || 0;
+
         if (count === 0) return null;
+
         const isMine = comment.myReaction === emoji;
+
         return (
           <button
             key={emoji}
@@ -311,7 +415,10 @@ function CommentReactions({
   );
 }
 
-// ─── Main FeedPostCard ────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Main FeedPostCard
+// ─────────────────────────────────────────────────────────────
+
 export default function FeedPostCard({
   post,
   currentUserId,
@@ -326,10 +433,7 @@ export default function FeedPostCard({
   const { t } = useTranslation(["feedpost", "common"]);
   const { user: viewer } = useAuth();
   const { getActiveStatus } = useSocket();
-  // `now` refreshes every 60s so the "Active X ago" label stays accurate
-  // without re-fetching the post.
   const [now, setNow] = useState(() => Date.now());
-
   const [showStats, setShowStats] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(post.content || "");
@@ -350,28 +454,58 @@ export default function FeedPostCard({
   const [editCommentText, setEditCommentText] = useState("");
   const [savingCommentId, setSavingCommentId] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [deleteCommentTarget, setDeleteCommentTarget] = useState(null);
+  const [deletingComment, setDeletingComment] = useState(false);
+
+  // The comment/reply currently being replied to
   const [replyingTo, setReplyingTo] = useState(null);
 
-  // ── Follow state ──
+  // ───────────────────────────────────────────────────────────
+  // Follow state
+  // ───────────────────────────────────────────────────────────
+
   const [following, setFollowing] = useState(post.user?.isFollowing ?? false);
+
   const [followLoading, setFollowLoading] = useState(false);
 
-  // ── Respect state (optimistic UI) ──
+  // ───────────────────────────────────────────────────────────
+  // Respect state
+  // ───────────────────────────────────────────────────────────
+
   const [didRespect, setDidRespect] = useState(post.didRespect || false);
+
   const [respectCount, setRespectCount] = useState(post.respectCount || 0);
+
   const [respecting, setRespecting] = useState(false);
 
-  // ── Reaction picker state ──
+  // ───────────────────────────────────────────────────────────
+  // Reaction picker state
+  // ───────────────────────────────────────────────────────────
+
   const [openPickerId, setOpenPickerId] = useState(null);
+
   const [reactingCommentId, setReactingCommentId] = useState(null);
 
+  // ───────────────────────────────────────────────────────────
+  // Refs
+  // ───────────────────────────────────────────────────────────
+
   const menuRef = useRef(null);
+
   const commentInputRef = useRef(null);
+
   const commentRefs = useRef({});
+
   const autoFocusDone = useRef(false);
 
+  // ───────────────────────────────────────────────────────────
+  // Basic post/user data
+  // ───────────────────────────────────────────────────────────
+
   const user = post.user || {};
+
   const workout = post.workout || {};
+
   const isOwner = currentUserId && user._id === currentUserId;
 
   const timeAgo = post.createdAt
@@ -387,34 +521,37 @@ export default function FeedPostCard({
     user.name?.toLowerCase().replace(/\s+/g, "") ||
     "user";
 
+  // ───────────────────────────────────────────────────────────
+  // Toast
+  // ───────────────────────────────────────────────────────────
+
   const showToast = useCallback((message, type = "info") => {
-    setToast({ message, type });
+    setToast({
+      message,
+      type,
+    });
   }, []);
 
-  // ── Active status ──
-  // Refresh `now` every 60s so the "Active X ago" label stays accurate
-  // without re-fetching the post.
+  // ───────────────────────────────────────────────────────────
+  // Active status
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), ACTIVE_REFRESH_MS);
+    const timer = setInterval(() => {
+      setNow(Date.now());
+    }, ACTIVE_REFRESH_MS);
+
     return () => clearInterval(timer);
   }, []);
 
-  // Prefer the live socket presence timestamp; fall back to the value the
-  // backend attached to the post author (last_active_at).
   const socketStatus = getActiveStatus(user._id);
+
   const lastActiveAt =
     socketStatus?.lastActiveAt || user.last_active_at || null;
 
-  // Reciprocity: active status is hidden if the author OR the viewer
-  // disabled "show active status" (same rule as the profile endpoint).
   const showActiveStatus =
     user.show_active_status !== false && viewer?.show_active_status !== false;
 
-  // A user is "online" (green dot) if active status is visible AND they're
-  // live in the socket presence set, OR the backend flagged them online,
-  // OR their last heartbeat is within the 2-minute window. This way the
-  // dot shows even when last_active_at isn't populated but the user is
-  // actively connected via socket.
   const isOnline =
     showActiveStatus &&
     (socketStatus?.online === true ||
@@ -422,71 +559,135 @@ export default function FeedPostCard({
       (!!lastActiveAt &&
         now - new Date(lastActiveAt).getTime() < ACTIVE_WINDOW_MS));
 
-  // Format the "Active X ago" label per the spec:
-  // <1m → "Active just now"; 1–59m → "Active Xm ago";
-  // 1–23h → "Active Xh ago"; ≥24h → "Active Xd ago".
   const activeLabel = (() => {
-    if (!showActiveStatus || !lastActiveAt) return null;
+    if (!showActiveStatus || !lastActiveAt) {
+      return null;
+    }
+
     const diffMs = now - new Date(lastActiveAt).getTime();
-    if (diffMs < ACTIVE_WINDOW_MS) return null; // online → no label, just the dot
+
+    if (diffMs < ACTIVE_WINDOW_MS) {
+      return null;
+    }
+
     const mins = Math.floor(diffMs / 60000);
-    if (mins < 1) return t("feedpost:active.justNow");
-    if (mins < 60) return t("feedpost:active.minutes", { count: mins });
+
+    if (mins < 1) {
+      return t("feedpost:active.justNow");
+    }
+
+    if (mins < 60) {
+      return t("feedpost:active.minutes", {
+        count: mins,
+      });
+    }
+
     const hours = Math.floor(mins / 60);
-    if (hours < 24) return t("feedpost:active.hours", { count: hours });
+
+    if (hours < 24) {
+      return t("feedpost:active.hours", {
+        count: hours,
+      });
+    }
+
     const days = Math.floor(hours / 24);
-    return t("feedpost:active.days", { count: days });
+
+    return t("feedpost:active.days", {
+      count: days,
+    });
   })();
 
-  // Sync respect state when prop changes (e.g., parent re-fetches)
+  // ───────────────────────────────────────────────────────────
+  // Sync respect state
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     setDidRespect(post.didRespect || false);
+
     setRespectCount(post.respectCount || 0);
   }, [post.didRespect, post.respectCount]);
 
+  // ───────────────────────────────────────────────────────────
   // Menu click-outside
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!showMenu) return;
+
     const close = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target))
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
         setShowMenu(false);
+      }
     };
+
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+
+    return () => {
+      document.removeEventListener("click", close);
+    };
   }, [showMenu]);
 
+  // ───────────────────────────────────────────────────────────
   // Close reaction picker on outside click
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!openPickerId) return;
-    const close = () => setOpenPickerId(null);
+
+    const close = () => {
+      setOpenPickerId(null);
+    };
+
     document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
+
+    return () => {
+      document.removeEventListener("click", close);
+    };
   }, [openPickerId]);
 
+  // ───────────────────────────────────────────────────────────
   // Load comments
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
     if (!showComments) return;
+
     let cancelled = false;
+
     async function load() {
       setCommentsLoading(true);
+
       try {
         const { data } = await getComments(post._id);
-        if (!cancelled) setComments(data.data || []);
+
+        if (!cancelled) {
+          setComments(data.data || []);
+        }
       } catch (err) {
         console.error("Failed to load comments:", err);
       } finally {
-        if (!cancelled) setCommentsLoading(false);
+        if (!cancelled) {
+          setCommentsLoading(false);
+        }
       }
     }
+
     load();
+
     return () => {
       cancelled = true;
     };
   }, [showComments, post._id]);
 
+  // ───────────────────────────────────────────────────────────
   // Auto-scroll to focused comment / focus reply input
+  // ───────────────────────────────────────────────────────────
+
   useEffect(() => {
-    if (!showComments || commentsLoading || autoFocusDone.current) return;
+    if (!showComments || commentsLoading || autoFocusDone.current) {
+      return;
+    }
+
     autoFocusDone.current = true;
 
     if (focusCommentId && commentRefs.current[focusCommentId]) {
@@ -495,139 +696,203 @@ export default function FeedPostCard({
         block: "center",
       });
     }
+
     if (autoFocusReply) {
       commentInputRef.current?.focus();
     }
   }, [showComments, commentsLoading, focusCommentId, autoFocusReply]);
 
-  // ── FOLLOW / UNFOLLOW ──
+  // ───────────────────────────────────────────────────────────
+  // FOLLOW / UNFOLLOW
+  // ───────────────────────────────────────────────────────────
+
   const handleToggleFollow = async (e) => {
     e.preventDefault();
     e.stopPropagation();
+
     if (followLoading) return;
+
     setFollowLoading(true);
+
     const next = !following;
+
     setFollowing(next);
+
     try {
       await followUserById(user._id);
     } catch (err) {
       setFollowing(!next);
+
       showToast(t("feedpost:toast.followUpdateFailed"), "error");
+
       console.error("Follow error:", err);
     } finally {
       setFollowLoading(false);
     }
   };
 
-  // ── RESPECT ──
+  // ───────────────────────────────────────────────────────────
+  // RESPECT
+  // ───────────────────────────────────────────────────────────
+
   const handleRespect = async () => {
     if (respecting) return;
+
     setRespecting(true);
+
     try {
       await onRespect(post._id, post.didRespect, post.respectCount);
     } catch (err) {
       showToast(t("feedpost:toast.respectUpdateFailed"), "error");
+
       console.error("Respect error:", err);
     } finally {
       setRespecting(false);
     }
   };
-  // ── SAVE TO FAVORITES ──
+
+  // ───────────────────────────────────────────────────────────
+  // SAVE TO FAVORITES
+  // ───────────────────────────────────────────────────────────
+
   const handleToggleSave = async () => {
     if (savingFavorite) return;
+
     setSavingFavorite(true);
+
     const newState = !saved;
+
     setSaved(newState);
     setShowMenu(false);
+
     try {
       if (newState) {
         await savePost(post._id);
+
         showToast(t("feedpost:toast.savedToFavorites"), "success");
       } else {
         await unsavePost(post._id);
+
         showToast(t("feedpost:toast.removedFromFavorites"), "info");
       }
     } catch (err) {
       setSaved(!newState);
+
       showToast(t("feedpost:toast.favoritesUpdateFailed"), "error");
+
       console.error("Save error:", err);
     } finally {
       setSavingFavorite(false);
     }
   };
 
-  // ── NOT INTERESTED ──
+  // ───────────────────────────────────────────────────────────
+  // NOT INTERESTED
+  // ───────────────────────────────────────────────────────────
+
   const handleToggleInterest = async () => {
     if (hiding) return;
+
     setHiding(true);
+
     const newHidden = !hidden;
+
     setHidden(newHidden);
     setShowMenu(false);
+
     try {
       if (newHidden) {
         await hidePost(post._id);
+
         showToast(t("feedpost:toast.postHidden"), "info");
       } else {
         await unhidePost(post._id);
+
         showToast(t("feedpost:toast.postUnhidden"), "info");
       }
     } catch (err) {
       setHidden(!newHidden);
+
       showToast(t("feedpost:toast.preferencesUpdateFailed"), "error");
+
       console.error("Hide error:", err);
     } finally {
       setHiding(false);
     }
   };
 
-  // ── SHARE ──
+  // ───────────────────────────────────────────────────────────
+  // SHARE
+  // ───────────────────────────────────────────────────────────
+
   const handleShare = async () => {
     const shareData = {
       title: `${user.name}'s workout on Zyft`,
       text: post.content || `${workout.title} - ${workout.category}`,
       url: `${window.location.origin}/post/${post._id}`,
     };
+
     try {
       if (navigator.share) {
         await navigator.share(shareData);
+
         trackShare(post._id, "native").catch(() => {});
+
         showToast(t("feedpost:toast.sharedSuccessfully"), "success");
       } else {
         await navigator.clipboard.writeText(shareData.url);
+
         trackShare(post._id, "clipboard").catch(() => {});
+
         showToast(t("feedpost:toast.linkCopied"), "success");
       }
     } catch (err) {
       if (err.name !== "AbortError") {
         console.error("Share failed:", err);
+
         showToast(t("feedpost:toast.shareCancelled"), "info");
       }
     }
+
     setShowMenu(false);
   };
 
-  // ── REPORT ──
+  // ───────────────────────────────────────────────────────────
+  // REPORT
+  // ───────────────────────────────────────────────────────────
+
   const handleReport = async (reason) => {
     try {
       await reportPost(post._id, reason);
+
       showToast(t("feedpost:report.submitted"), "success");
     } catch (err) {
       showToast(t("feedpost:report.submitFailed"), "error");
+
       console.error("Report error:", err);
     }
   };
 
-  // ── POST EDITING ──
+  // ───────────────────────────────────────────────────────────
+  // POST EDITING
+  // ───────────────────────────────────────────────────────────
+
   const handleSaveEdit = async () => {
     const trimmed = editText.trim();
+
     if (!trimmed || trimmed === post.content) {
       setIsEditing(false);
       setEditText(post.content || "");
       return;
     }
+
     setIsSaving(true);
+
     try {
-      await onUpdate(post._id, { content: trimmed });
+      await onUpdate(post._id, {
+        content: trimmed,
+      });
+
       setIsEditing(false);
     } catch {
       setEditText(post.content || "");
@@ -638,165 +903,299 @@ export default function FeedPostCard({
 
   const handleCancelEdit = () => {
     setEditText(post.content || "");
+
     setIsEditing(false);
   };
 
-  // ── ADD COMMENTS / REPLIES ──
+  // ───────────────────────────────────────────────────────────
+  // ADD COMMENT / REPLY
+  // ───────────────────────────────────────────────────────────
+
   const handleAddComment = async () => {
     const trimmed = commentText.trim();
+
     if (!trimmed) return;
+
     setPostingComment(true);
+
     try {
       const { data } = await addComment(post._id, {
         content: trimmed,
         parentComment: replyingTo?._id || null,
       });
 
+      const newComment = {
+        ...data.data,
+        replies: data.data?.replies || [],
+        reactionSummary: data.data?.reactionSummary || {},
+        myReaction: data.data?.myReaction || null,
+      };
+
+      // ─────────────────────────────────────────
+      // New reply
+      // ─────────────────────────────────────────
+
       if (replyingTo) {
         setComments((prev) =>
-          prev.map((c) =>
-            c._id === replyingTo._id
-              ? { ...c, replies: [...(c.replies || []), data.data] }
-              : c,
-          ),
+          prev.map((comment) => {
+            // Replying directly to a top-level comment
+            if (comment._id === replyingTo._id) {
+              return {
+                ...comment,
+                replies: [...(comment.replies || []), newComment],
+              };
+            }
+
+            // Replying to an existing reply
+            // Backend keeps replies one level deep,
+            // so attach the new reply to the
+            // same top-level comment.
+            if (
+              comment.replies?.some((reply) => reply._id === replyingTo._id)
+            ) {
+              return {
+                ...comment,
+                replies: [...(comment.replies || []), newComment],
+              };
+            }
+
+            return comment;
+          }),
         );
       } else {
-        setComments((prev) => [data.data, ...prev]);
+        // ───────────────────────────────────────
+        // New top-level comment
+        // ───────────────────────────────────────
+
+        setComments((prev) => [newComment, ...prev]);
       }
 
       setCommentText("");
       setReplyingTo(null);
-    } catch {
+    } catch (err) {
+      console.error("Failed to add comment:", err);
+
       showToast(t("feedpost:toast.commentPostFailed"), "error");
     } finally {
       setPostingComment(false);
     }
   };
 
+  // ───────────────────────────────────────────────────────────
+  // START REPLY
+  // ───────────────────────────────────────────────────────────
+
   const handleStartReply = (comment) => {
     setReplyingTo(comment);
-    commentInputRef.current?.focus();
+
+    setTimeout(() => {
+      commentInputRef.current?.focus();
+    }, 0);
   };
+
+  // ───────────────────────────────────────────────────────────
+  // CANCEL REPLY
+  // ───────────────────────────────────────────────────────────
 
   const handleCancelReply = () => {
     setReplyingTo(null);
+    setCommentText("");
   };
 
-  // ── DELETE COMMENTS ──
+  // ───────────────────────────────────────────────────────────
+  // DELETE COMMENT / REPLY
+  // ───────────────────────────────────────────────────────────
+
   const handleDeleteComment = async (commentId) => {
-    if (!confirm("Delete this comment?")) return;
+    console.log("DELETE CLICKED:", commentId);
+
+    setDeleteCommentTarget(commentId);
+  };
+
+  const confirmDeleteComment = async () => {
+    if (!deleteCommentTarget || deletingComment) return;
+
+    setDeletingComment(true);
+
     try {
-      await deleteComment(post._id, commentId);
-      setComments((prev) =>
-        prev
-          .filter((c) => c._id !== commentId)
-          .map((c) => ({
-            ...c,
-            replies: (c.replies || []).filter((r) => r._id !== commentId),
-          })),
-      );
-      if (replyingTo?._id === commentId) setReplyingTo(null);
-    } catch {
-      showToast(t("feedpost:toast.commentDeleteFailed"), "error");
+      // Delete ONLY the selected comment/reply
+      await deleteComment(post._id, deleteCommentTarget);
+
+      // Reload comments from the backend
+      const { data } = await getComments(post._id);
+
+      setComments(data.data || []);
+
+      // Cancel reply mode if the deleted item was being replied to
+      if (replyingTo?._id === deleteCommentTarget) {
+        setReplyingTo(null);
+        setCommentText("");
+      }
+
+      setDeleteCommentTarget(null);
+
+      showToast("Comment deleted successfully", "success");
+    } catch (err) {
+      console.error("Delete comment error:", err);
+
+      showToast("Failed to delete comment", "error");
+    } finally {
+      setDeletingComment(false);
     }
   };
+
+  const cancelDeleteComment = () => {
+    if (deletingComment) return;
+    setDeleteCommentTarget(null);
+  };
+
+  // ───────────────────────────────────────────────────────────
+  // START EDIT COMMENT
+  // ───────────────────────────────────────────────────────────
 
   const handleStartEditComment = (comment) => {
     setEditingCommentId(comment._id);
+
     setEditCommentText(comment.content);
   };
 
+  // ───────────────────────────────────────────────────────────
+  // SAVE EDIT COMMENT
+  // ───────────────────────────────────────────────────────────
+
   const handleSaveEditComment = async (commentId) => {
     const trimmed = editCommentText.trim();
+
     if (!trimmed) {
       setEditingCommentId(null);
+
       return;
     }
+
     setSavingCommentId(commentId);
+
     try {
       const { data } = await updateComment(post._id, commentId, {
         content: trimmed,
       });
+
       setComments((prev) =>
-        prev.map((c) => {
-          if (c._id === commentId) return { ...data.data, replies: c.replies };
-          if (c.replies?.some((r) => r._id === commentId)) {
+        prev.map((comment) => {
+          // Editing top-level comment
+          if (comment._id === commentId) {
             return {
-              ...c,
-              replies: c.replies.map((r) =>
-                r._id === commentId ? data.data : r,
+              ...data.data,
+              replies: comment.replies || [],
+            };
+          }
+
+          // Editing reply
+          if (comment.replies?.some((reply) => reply._id === commentId)) {
+            return {
+              ...comment,
+              replies: comment.replies.map((reply) =>
+                reply._id === commentId ? data.data : reply,
               ),
             };
           }
-          return c;
+
+          return comment;
         }),
       );
+
       setEditingCommentId(null);
-    } catch {
+
+      setEditCommentText("");
+    } catch (err) {
+      console.error("Update comment error:", err);
+
       showToast(t("feedpost:toast.commentUpdateFailed"), "error");
     } finally {
       setSavingCommentId(null);
     }
   };
 
+  // ───────────────────────────────────────────────────────────
+  // CANCEL EDIT COMMENT
+  // ───────────────────────────────────────────────────────────
+
   const handleCancelEditComment = () => {
     setEditingCommentId(null);
     setEditCommentText("");
   };
 
-  // ── REACTIONS ──
+  // ───────────────────────────────────────────────────────────
+  // COMMENT REACTIONS
+  // ───────────────────────────────────────────────────────────
+
   const handleReactToComment = async (commentId, emoji) => {
-    if (reactingCommentId) return;
+    if (reactingCommentId) {
+      return;
+    }
+
     setReactingCommentId(commentId);
+
     try {
       const { data } = await reactToComment(post._id, commentId, emoji);
+
       setComments((prev) =>
-        prev.map((c) => {
-          if (c._id === commentId) {
+        prev.map((comment) => {
+          // Top-level comment
+          if (comment._id === commentId) {
             return {
-              ...c,
+              ...comment,
               reactionSummary: data.data.reactionSummary,
               myReaction: data.data.myReaction,
             };
           }
-          if (c.replies?.some((r) => r._id === commentId)) {
+
+          // Reply
+          if (comment.replies?.some((reply) => reply._id === commentId)) {
             return {
-              ...c,
-              replies: c.replies.map((r) =>
-                r._id === commentId
+              ...comment,
+              replies: comment.replies.map((reply) =>
+                reply._id === commentId
                   ? {
-                      ...r,
+                      ...reply,
                       reactionSummary: data.data.reactionSummary,
                       myReaction: data.data.myReaction,
                     }
-                  : r,
+                  : reply,
               ),
             };
           }
-          return c;
+
+          return comment;
         }),
       );
     } catch (err) {
       showToast(t("feedpost:toast.reactFailed"), "error");
+
       console.error("React error:", err);
     } finally {
       setReactingCommentId(null);
+
       setOpenPickerId(null);
     }
   };
 
-  // ── NAVIGATE TO WORKOUT PLAN DETAIL ──
+  // ───────────────────────────────────────────────────────────
+  // NAVIGATE TO WORKOUT PLAN DETAIL
+  // ───────────────────────────────────────────────────────────
+
   const handleViewWorkoutPlan = () => {
     const planId =
       workout._id || workout.id || post.workoutTemplateId || post.workoutId;
+
     if (planId) {
       navigate(`/workout-plan/${planId}`);
     }
   };
 
-  // Posts from deleted accounts have user: null from the API.
-  // Show a placeholder instead of silently dropping them — users shouldn't
-  // see content mysteriously disappear from the feed with no explanation.
+  // ───────────────────────────────────────────────────────────
+  // DELETED ACCOUNT PLACEHOLDER
+  // ───────────────────────────────────────────────────────────
+
   if (!user?._id) {
     return (
       <div className="bg-[#13131f] rounded-2xl p-4 border border-white/5">
@@ -807,16 +1206,21 @@ export default function FeedPostCard({
     );
   }
 
-  // Hidden state
+  // ───────────────────────────────────────────────────────────
+  // HIDDEN POST
+  // ───────────────────────────────────────────────────────────
+
   if (hidden) {
     return (
       <div className="bg-[#13131f] rounded-2xl p-4 border border-white/5 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <EyeOff size={16} className="text-gray-500" />
+
           <span className="text-xs text-gray-500">
             {t("feedpost:hidden.label")}
           </span>
         </div>
+
         <button
           onClick={handleToggleInterest}
           disabled={hiding}
@@ -828,20 +1232,29 @@ export default function FeedPostCard({
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────
+
   return (
     <>
-      <div className="bg-[#13131f] rounded-2xl overflow-hidden border border-white/5">
-        {/* ── User header ── */}
+      <div className="bg-[#13131f] rounded-2xl border border-white/5">
+        {/* ═════════════════════════════════════════════════════
+            USER HEADER
+        ═════════════════════════════════════════════════════ */}
+
         <div className="p-4 flex items-center justify-between">
           <Link
             to={`/profile/${user._id}`}
             className="flex items-center gap-3 flex-1 min-w-0"
           >
             <UserAvatar user={user} size={10} t={t} online={isOnline} />
+
             <div className="min-w-0">
               <h3 className="text-sm font-semibold truncate">
                 {user.name || t("feedpost:post.anonymous")}
               </h3>
+
               <p className="text-xs text-gray-500 truncate">
                 @{userHandle} · {timeAgo}
                 {activeLabel && (
@@ -898,6 +1311,7 @@ export default function FeedPostCard({
                     <div className="w-4 h-4 rounded-full border-2 border-purple-400 flex items-center justify-center">
                       <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                     </div>
+
                     {t("feedpost:menu.visitProfile")}
                   </Link>
 
@@ -916,11 +1330,13 @@ export default function FeedPostCard({
                           : "text-gray-500"
                       }
                     />
+
                     <span className={saved ? "text-purple-300" : ""}>
                       {saved
                         ? t("feedpost:menu.savedToFavorites")
                         : t("feedpost:menu.saveToFavorites")}
                     </span>
+
                     {savingFavorite && (
                       <Loader2 size={12} className="animate-spin ml-auto" />
                     )}
@@ -932,7 +1348,9 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5 disabled:opacity-50"
                   >
                     <EyeOff size={14} className="text-gray-500" />
+
                     {t("feedpost:menu.notInterested")}
+
                     {hiding && (
                       <Loader2 size={12} className="animate-spin ml-auto" />
                     )}
@@ -943,6 +1361,7 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5"
                   >
                     <Share2 size={14} className="text-gray-500" />
+
                     {t("feedpost:menu.share")}
                   </button>
 
@@ -957,6 +1376,7 @@ export default function FeedPostCard({
                       className="w-full px-4 py-2.5 text-left text-sm text-gray-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-2.5"
                     >
                       <Pencil size={14} className="text-purple-400" />
+
                       {t("feedpost:menu.editPost")}
                     </button>
                   )}
@@ -969,6 +1389,7 @@ export default function FeedPostCard({
                     className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
                   >
                     <Flag size={14} />
+
                     {t("feedpost:menu.report")}
                   </button>
 
@@ -981,6 +1402,7 @@ export default function FeedPostCard({
                       className="w-full px-4 py-2.5 text-left text-sm text-red-400 hover:bg-red-500/10 transition-colors flex items-center gap-2.5"
                     >
                       <Trash2 size={14} />
+
                       {t("feedpost:menu.delete")}
                     </button>
                   )}
@@ -990,16 +1412,23 @@ export default function FeedPostCard({
           </div>
         </div>
 
-        {/* ── Post content (edit mode) ── */}
+        {/* ═════════════════════════════════════════════════════
+            POST CONTENT
+        ═════════════════════════════════════════════════════ */}
+
         {isEditing ? (
           <div className="px-4 pb-3 space-y-3">
             <textarea
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey))
+                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
                   handleSaveEdit();
-                if (e.key === "Escape") handleCancelEdit();
+                }
+
+                if (e.key === "Escape") {
+                  handleCancelEdit();
+                }
               }}
               className="w-full bg-[#0a0a0a] rounded-xl p-3 text-sm text-gray-300 resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5 placeholder-gray-600"
               rows={3}
@@ -1007,10 +1436,14 @@ export default function FeedPostCard({
               placeholder={t("feedpost:post.editPlaceholder")}
               autoFocus
             />
+
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-gray-600">
-                {t("feedpost:post.charCountSave", { count: editText.length })}
+                {t("feedpost:post.charCountSave", {
+                  count: editText.length,
+                })}
               </span>
+
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCancelEdit}
@@ -1019,6 +1452,7 @@ export default function FeedPostCard({
                 >
                   {t("common:cancel")}
                 </button>
+
                 <button
                   onClick={handleSaveEdit}
                   disabled={isSaving || !editText.trim()}
@@ -1028,7 +1462,8 @@ export default function FeedPostCard({
                     <Loader2 size={12} className="animate-spin" />
                   ) : (
                     <Check size={14} />
-                  )}{" "}
+                  )}
+
                   {t("common:save")}
                 </button>
               </div>
@@ -1042,7 +1477,10 @@ export default function FeedPostCard({
           )
         )}
 
-        {/* ── Workout info (CLICKABLE → navigates to plan detail) ── */}
+        {/* ═════════════════════════════════════════════════════
+            WORKOUT INFO
+        ═════════════════════════════════════════════════════ */}
+
         {workout.title && (
           <div className="px-4 pb-3">
             <button
@@ -1051,10 +1489,12 @@ export default function FeedPostCard({
             >
               <div className="flex items-center gap-2 mb-0.5">
                 <Dumbbell size={13} className="text-purple-400 shrink-0" />
+
                 <h4 className="text-xs font-bold tracking-wide text-purple-300 group-hover:text-purple-200 transition-colors">
                   {workout.title}
                 </h4>
               </div>
+
               <p className="text-[11px] text-gray-500 ml-5">
                 {workout.category || ""}
               </p>
@@ -1062,7 +1502,10 @@ export default function FeedPostCard({
           </div>
         )}
 
-        {/* ── Workout stats ── */}
+        {/* ═════════════════════════════════════════════════════
+            WORKOUT STATS
+        ═════════════════════════════════════════════════════ */}
+
         {workout.title && (
           <div className="px-4 py-3 flex gap-2">
             {workout.duration != null && (
@@ -1073,26 +1516,33 @@ export default function FeedPostCard({
                 {workout.duration} {t("feedpost:post.durationUnit")}
               </div>
             )}
+
             {workout.caloriesBurned != null && (
               <div className="flex-1 py-2 rounded-xl text-center text-xs font-semibold bg-[#8b5cf6]/20 border border-[#8b5cf6]/30 text-[#a78bfa]">
                 <p className="text-[10px] text-gray-500 mb-0.5">
                   {t("feedpost:post.calories")}
                 </p>
+
                 {workout.caloriesBurned}
               </div>
             )}
+
             {workout.exercises?.length > 0 && (
               <div className="flex-1 py-2 rounded-xl text-center text-xs font-semibold bg-white/5 border border-white/5 text-gray-300">
                 <p className="text-[10px] text-gray-500 mb-0.5">
                   {t("feedpost:post.exercises")}
                 </p>
+
                 {workout.exercises.length}
               </div>
             )}
           </div>
         )}
 
-        {/* ── Workout image ── */}
+        {/* ═════════════════════════════════════════════════════
+            WORKOUT IMAGE
+        ═════════════════════════════════════════════════════ */}
+
         {workout.imageUrl && (
           <div className="px-4 pb-3">
             <img
@@ -1105,7 +1555,10 @@ export default function FeedPostCard({
           </div>
         )}
 
-        {/* ── Detailed stats toggle ── */}
+        {/* ═════════════════════════════════════════════════════
+            DETAILED STATS
+        ═════════════════════════════════════════════════════ */}
+
         {workout.exercises?.length > 0 && (
           <div className="px-4 pb-2">
             <button
@@ -1113,19 +1566,23 @@ export default function FeedPostCard({
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-300 transition-all"
             >
               {showStats ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+
               {showStats
                 ? t("feedpost:post.hideStats")
                 : t("feedpost:post.viewStats")}
             </button>
+
             {showStats && (
               <div className="mt-2 p-3 bg-[#1a1a2e] rounded-xl border border-white/5 text-xs space-y-1.5">
                 {workout.exercises.map((ex, i) => {
                   const { count, repsLabel, weightLabel } = summarizeSets(
                     ex.sets,
                   );
+
                   return (
                     <div key={i} className="flex justify-between">
                       <span className="text-gray-500">{ex.name}</span>
+
                       <span className="text-white">
                         {count} × {repsLabel}
                         {weightLabel ? ` @ ${weightLabel}` : ""}
@@ -1138,7 +1595,10 @@ export default function FeedPostCard({
           </div>
         )}
 
-        {/* ── Actions ── */}
+        {/* ═════════════════════════════════════════════════════
+            POST ACTIONS
+        ═════════════════════════════════════════════════════ */}
+
         <div className="px-4 py-3 border-t border-white/5 flex items-center gap-4">
           <button
             onClick={handleRespect}
@@ -1150,13 +1610,16 @@ export default function FeedPostCard({
             }`}
           >
             <Heart size={14} fill={post.didRespect ? "currentColor" : "none"} />
+
             {post.respectCount > 0 && (
               <>
-                <span className="font-semibold">{post.respectCount}</span>{" "}
+                <span className="font-semibold">{post.respectCount}</span>
+
                 <span>{t("feedpost:post.respects")}</span>
               </>
             )}
           </button>
+
           <button
             onClick={() => setShowComments((prev) => !prev)}
             className={`flex items-center gap-1.5 text-xs transition-all active:scale-95 ${
@@ -1169,18 +1632,27 @@ export default function FeedPostCard({
               size={14}
               fill={showComments ? "currentColor" : "none"}
             />
+
             {post.commentCount > 0 && (
               <>
-                <span className="font-semibold">{post.commentCount}</span>{" "}
+                <span className="font-semibold">{post.commentCount}</span>
+
                 <span>{t("feedpost:post.comments")}</span>
               </>
             )}
           </button>
         </div>
 
-        {/* ── Comments Section ── */}
+        {/* ═════════════════════════════════════════════════════
+            COMMENTS SECTION
+        ═════════════════════════════════════════════════════ */}
+
         {showComments && (
           <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-3">
+            {/* ─────────────────────────────────────────────────
+                COMMENT INPUT
+            ───────────────────────────────────────────────── */}
+
             <div className="flex flex-col gap-1.5">
               {replyingTo && (
                 <div className="flex items-center justify-between px-1">
@@ -1189,6 +1661,7 @@ export default function FeedPostCard({
                       name: replyingTo.user?.name,
                     })}
                   </span>
+
                   <button
                     onClick={handleCancelReply}
                     className="text-gray-500 hover:text-gray-300 transition-colors"
@@ -1197,13 +1670,19 @@ export default function FeedPostCard({
                   </button>
                 </div>
               )}
+
               <div className="flex gap-2">
                 <input
                   type="text"
                   ref={commentInputRef}
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddComment()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddComment();
+                    }
+                  }}
                   placeholder={
                     replyingTo
                       ? t("feedpost:commentsSection.replyPlaceholder", {
@@ -1213,6 +1692,7 @@ export default function FeedPostCard({
                   }
                   className="flex-1 bg-[#0a0a0a] rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5 placeholder-gray-600"
                 />
+
                 <button
                   onClick={handleAddComment}
                   disabled={postingComment || !commentText.trim()}
@@ -1227,6 +1707,10 @@ export default function FeedPostCard({
               </div>
             </div>
 
+            {/* ─────────────────────────────────────────────────
+                LOADING / EMPTY STATE
+            ───────────────────────────────────────────────── */}
+
             {commentsLoading ? (
               <div className="flex justify-center py-4">
                 <Loader2 size={16} className="animate-spin text-purple-400" />
@@ -1237,16 +1721,23 @@ export default function FeedPostCard({
               </p>
             ) : (
               <div className="space-y-2.5">
+                {/* ═══════════════════════════════════════════
+                    TOP-LEVEL COMMENTS
+                ═══════════════════════════════════════════ */}
+
                 {comments.map((comment) => {
                   const isCommentOwner =
                     currentUserId && comment.user?._id === currentUserId;
+
                   const isEditingThisComment = editingCommentId === comment._id;
 
                   return (
                     <div
                       key={comment._id}
                       ref={(el) => {
-                        if (el) commentRefs.current[comment._id] = el;
+                        if (el) {
+                          commentRefs.current[comment._id] = el;
+                        }
                       }}
                       className={`rounded-xl transition-colors ${
                         comment._id === focusCommentId
@@ -1254,10 +1745,16 @@ export default function FeedPostCard({
                           : ""
                       }`}
                     >
+                      {/* ─────────────────────────────────
+                            PARENT COMMENT
+                        ───────────────────────────────── */}
+
                       <div className="flex gap-2 group">
                         <UserAvatar user={comment.user} size={7} t={t} />
+
                         <div className="flex-1 min-w-0">
                           {isEditingThisComment ? (
+                            /* ───────────── EDIT PARENT ───────────── */
                             <div className="space-y-2">
                               <input
                                 type="text"
@@ -1266,14 +1763,18 @@ export default function FeedPostCard({
                                   setEditCommentText(e.target.value)
                                 }
                                 onKeyDown={(e) => {
-                                  if (e.key === "Enter")
+                                  if (e.key === "Enter") {
                                     handleSaveEditComment(comment._id);
-                                  if (e.key === "Escape")
+                                  }
+
+                                  if (e.key === "Escape") {
                                     handleCancelEditComment();
+                                  }
                                 }}
                                 className="w-full bg-[#0a0a0a] rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5"
                                 autoFocus
                               />
+
                               <div className="flex gap-2">
                                 <button
                                   onClick={() =>
@@ -1286,6 +1787,7 @@ export default function FeedPostCard({
                                     ? t("feedpost:commentsSection.saving")
                                     : t("common:save")}
                                 </button>
+
                                 <button
                                   onClick={handleCancelEditComment}
                                   className="text-[10px] text-gray-500 hover:text-gray-400"
@@ -1296,12 +1798,15 @@ export default function FeedPostCard({
                             </div>
                           ) : (
                             <>
+                              {/* ───────────── COMMENT BUBBLE ───────────── */}
+
                               <div className="bg-[#0a0a0a] rounded-xl px-3 py-2">
                                 <div className="flex items-center justify-between">
                                   <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
                                     {comment.user?.name ||
                                       t("feedpost:post.anonymous")}
                                   </p>
+
                                   {isCommentOwner && (
                                     <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button
@@ -1313,6 +1818,7 @@ export default function FeedPostCard({
                                       >
                                         <Pencil size={10} />
                                       </button>
+
                                       <button
                                         onClick={() =>
                                           handleDeleteComment(comment._id)
@@ -1325,10 +1831,13 @@ export default function FeedPostCard({
                                     </div>
                                   )}
                                 </div>
+
                                 <p className="text-xs text-gray-300">
                                   {comment.content}
                                 </p>
                               </div>
+
+                              {/* ───────────── REACTIONS ───────────── */}
 
                               <CommentReactions
                                 comment={comment}
@@ -1339,6 +1848,8 @@ export default function FeedPostCard({
                                 t={t}
                               />
 
+                              {/* ───────────── DATE + REPLY ───────────── */}
+
                               <div className="flex items-center gap-2 mt-0.5 ml-1">
                                 <p className="text-[10px] text-gray-600">
                                   {new Date(
@@ -1347,6 +1858,7 @@ export default function FeedPostCard({
                                     month: "short",
                                     day: "numeric",
                                   })}
+
                                   {comment.updatedAt &&
                                     comment.updatedAt !== comment.createdAt && (
                                       <span className="text-gray-700 ml-1">
@@ -1354,11 +1866,15 @@ export default function FeedPostCard({
                                       </span>
                                     )}
                                 </p>
+
+                                {/* REPLY BUTTON FOR PARENT */}
+
                                 <button
                                   onClick={() => handleStartReply(comment)}
                                   className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-purple-400 transition-colors"
                                 >
                                   <Reply size={11} />
+
                                   {t("feedpost:commentsSection.reply")}
                                 </button>
                               </div>
@@ -1367,12 +1883,17 @@ export default function FeedPostCard({
                         </div>
                       </div>
 
+                      {/* ═════════════════════════════════════
+                            REPLIES
+                        ═════════════════════════════════════ */}
+
                       {comment.replies?.length > 0 && (
                         <div className="mt-2 ml-9 pl-3 border-l border-white/5 space-y-2.5">
                           {comment.replies.map((reply) => {
                             const isReplyOwner =
                               currentUserId &&
                               reply.user?._id === currentUserId;
+
                             const isEditingThisReply =
                               editingCommentId === reply._id;
 
@@ -1380,7 +1901,9 @@ export default function FeedPostCard({
                               <div
                                 key={reply._id}
                                 ref={(el) => {
-                                  if (el) commentRefs.current[reply._id] = el;
+                                  if (el) {
+                                    commentRefs.current[reply._id] = el;
+                                  }
                                 }}
                                 className={`flex gap-2 group rounded-xl transition-colors ${
                                   reply._id === focusCommentId
@@ -1388,9 +1911,14 @@ export default function FeedPostCard({
                                     : ""
                                 }`}
                               >
+                                {/* ───────────── REPLY AVATAR ───────────── */}
+
                                 <UserAvatar user={reply.user} size={7} t={t} />
+
                                 <div className="flex-1 min-w-0">
                                   {isEditingThisReply ? (
+                                    /* ───────────── EDIT REPLY ───────────── */
+
                                     <div className="space-y-2">
                                       <input
                                         type="text"
@@ -1399,14 +1927,18 @@ export default function FeedPostCard({
                                           setEditCommentText(e.target.value)
                                         }
                                         onKeyDown={(e) => {
-                                          if (e.key === "Enter")
+                                          if (e.key === "Enter") {
                                             handleSaveEditComment(reply._id);
-                                          if (e.key === "Escape")
+                                          }
+
+                                          if (e.key === "Escape") {
                                             handleCancelEditComment();
+                                          }
                                         }}
                                         className="w-full bg-[#0a0a0a] rounded-xl px-3 py-2 text-xs text-gray-300 focus:outline-none focus:ring-2 focus:ring-purple-500/50 border border-white/5"
                                         autoFocus
                                       />
+
                                       <div className="flex gap-2">
                                         <button
                                           onClick={() =>
@@ -1423,6 +1955,7 @@ export default function FeedPostCard({
                                               )
                                             : t("common:save")}
                                         </button>
+
                                         <button
                                           onClick={handleCancelEditComment}
                                           className="text-[10px] text-gray-500 hover:text-gray-400"
@@ -1433,12 +1966,15 @@ export default function FeedPostCard({
                                     </div>
                                   ) : (
                                     <>
+                                      {/* ───────────── REPLY BUBBLE ───────────── */}
+
                                       <div className="bg-[#0a0a0a] rounded-xl px-3 py-2">
                                         <div className="flex items-center justify-between">
                                           <p className="text-[10px] font-semibold text-gray-400 mb-0.5">
                                             {reply.user?.name ||
                                               t("feedpost:post.anonymous")}
                                           </p>
+
                                           {isReplyOwner && (
                                             <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                               <button
@@ -1450,6 +1986,7 @@ export default function FeedPostCard({
                                               >
                                                 <Pencil size={10} />
                                               </button>
+
                                               <button
                                                 onClick={() =>
                                                   handleDeleteComment(reply._id)
@@ -1462,10 +1999,13 @@ export default function FeedPostCard({
                                             </div>
                                           )}
                                         </div>
+
                                         <p className="text-xs text-gray-300">
                                           {reply.content}
                                         </p>
                                       </div>
+
+                                      {/* ───────────── REPLY REACTIONS ───────────── */}
 
                                       <CommentReactions
                                         comment={reply}
@@ -1478,21 +2018,42 @@ export default function FeedPostCard({
                                         t={t}
                                       />
 
-                                      <p className="text-[10px] text-gray-600 mt-0.5 ml-1">
-                                        {new Date(
-                                          reply.createdAt,
-                                        ).toLocaleDateString("en-US", {
-                                          month: "short",
-                                          day: "numeric",
-                                        })}
-                                        {reply.updatedAt &&
-                                          reply.updatedAt !==
-                                            reply.createdAt && (
-                                            <span className="text-gray-700 ml-1">
-                                              · {t("feedpost:post.edited")}
-                                            </span>
-                                          )}
-                                      </p>
+                                      {/* ───────────── REPLY DATE + REPLY BUTTON ───────────── */}
+
+                                      <div className="flex items-center gap-2 mt-0.5 ml-1">
+                                        <p className="text-[10px] text-gray-600">
+                                          {new Date(
+                                            reply.createdAt,
+                                          ).toLocaleDateString("en-US", {
+                                            month: "short",
+                                            day: "numeric",
+                                          })}
+
+                                          {reply.updatedAt &&
+                                            reply.updatedAt !==
+                                              reply.createdAt && (
+                                              <span className="text-gray-700 ml-1">
+                                                · {t("feedpost:post.edited")}
+                                              </span>
+                                            )}
+                                        </p>
+
+                                        {/* IMPORTANT:
+                                                Replies ALSO have
+                                                a Reply button now.
+                                            */}
+
+                                        <button
+                                          onClick={() =>
+                                            handleStartReply(reply)
+                                          }
+                                          className="flex items-center gap-1 text-[10px] text-gray-600 hover:text-purple-400 transition-colors"
+                                        >
+                                          <Reply size={11} />
+
+                                          {t("feedpost:commentsSection.reply")}
+                                        </button>
+                                      </div>
                                     </>
                                   )}
                                 </div>
@@ -1510,6 +2071,10 @@ export default function FeedPostCard({
         )}
       </div>
 
+      {/* ═══════════════════════════════════════════════════════
+    REPORT MODAL
+═══════════════════════════════════════════════════════ */}
+
       <ReportModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
@@ -1518,6 +2083,22 @@ export default function FeedPostCard({
         t={t}
       />
 
+      {/* ═══════════════════════════════════════════════════════
+    DELETE COMMENT MODAL
+═══════════════════════════════════════════════════════ */}
+
+      <DeleteCommentModal
+        isOpen={Boolean(deleteCommentTarget)}
+        onClose={cancelDeleteComment}
+        onConfirm={confirmDeleteComment}
+        deleting={deletingComment}
+        t={t}
+      />
+
+      {/* ═══════════════════════════════════════════════════════
+    TOAST
+═══════════════════════════════════════════════════════ */}
+
       {toast && (
         <Toast
           message={toast.message}
@@ -1525,6 +2106,10 @@ export default function FeedPostCard({
           onClose={() => setToast(null)}
         />
       )}
+
+      {/* ═══════════════════════════════════════════════════════
+    IMAGE PREVIEW
+═══════════════════════════════════════════════════════ */}
 
       {previewOpen && (
         <ImagePreviewModal

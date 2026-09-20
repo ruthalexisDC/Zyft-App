@@ -3,7 +3,7 @@
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import {
-  createPost, getFeed, getPost, getUserPosts,
+  createPost, getFeed, getPost, getUserPosts,  getSavedPosts,
   updatePost, deletePost, giveRespect, getRespects,
   addComment, getComments, deleteComment, repost, updateComment, reactToComment,
   // ── NEW: interaction controllers ──
@@ -31,6 +31,7 @@ router.get('/feed', getFeed);
 // ── Post CRUD ──
 router.post('/', validate(PostWorkoutSchema), createPost);
 router.get('/user/:userId', getUserPosts);
+router.get("/saved", getSavedPosts);
 
 // ── Comments ──
 router.post('/:postId/comments', addComment);

@@ -309,7 +309,7 @@ export default function Home() {
     try {
       const { data } = await getPosts({ type, limit: 50 });
       if (signalCancelled?.()) return;
-      setPosts(data.data ?? []);
+      setPosts(data.data?.posts ?? []);
     } catch (err) {
       if (signalCancelled?.()) return;
       console.error(err.response?.data?.message || err.message);
@@ -422,8 +422,8 @@ export default function Home() {
   const handleUpdatePost = async (postId, updates) => {
     try {
       const { data } = await updatePost(postId, updates);
-      setPosts((prev) => prev.map((p) => (p._id === postId ? data : p)));
-      return data;
+      setPosts((prev) => prev.map((p) => (p._id === postId ? data.data : p)));
+      return data.data;
     } catch (err) {
       console.error("Failed to update post:", err);
       throw err;
