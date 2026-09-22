@@ -199,9 +199,13 @@ export default function Profile() {
   const currentUserId =
     currentUser?._id || currentUser?.id || authUser?._id || authUser?.id;
 
-  const targetUserId = paramUserId || currentUserId;
+  const normalizedCurrentUserId = currentUserId?.toString();
+  const normalizedParamUserId = paramUserId?.toString();
 
-  const isOwnProfile = !paramUserId || paramUserId === currentUserId;
+  const targetUserId = normalizedParamUserId || normalizedCurrentUserId;
+
+  const isOwnProfile =
+    !normalizedParamUserId || normalizedParamUserId === normalizedCurrentUserId;
 
   const [posts, setPosts] = useState([]);
   const [savedPosts, setSavedPosts] = useState([]);
@@ -232,48 +236,28 @@ export default function Profile() {
     }
   }, [profileData]);
 
-  // ─── Fetch saved posts ───
-  const fetchSavedPosts = useCallback(async () => {
-    if (!isOwnProfile) return;
-
-    try {
-      const response = await getSavedPosts({
-        page: 1,
-        limit: 20,
-      });
-
-      const saved = response.data?.data || response.data?.posts || [];
-
-      setSavedPosts(saved);
-    } catch (err) {
-      console.error("Failed to fetch saved posts:", err);
-      setSavedPosts([]);
-    }
-  }, [isOwnProfile]);
-
+  // ─── Fetch saved posts when Saved tab is opened ───
   useEffect(() => {
-    if (activeTab === "Saved" && isOwnProfile) {
-      fetchSavedPosts();
-    }
-  }, [activeTab, isOwnProfile, fetchSavedPosts]);
+    if (activeTab !== "Saved" || !isOwnProfile) return;
 
-  // ─── Check follow status when viewing another user's profile ───
-  useEffect(() => {
-    if (isOwnProfile || !targetUserId || !currentUserId) return;
-
-    const checkFollowStatus = async () => {
+    const loadSavedPosts = async () => {
       try {
-        const { data } = await api.get(
-          `/users/id/${targetUserId}/follow-status`,
-        );
-        setIsFollowing(data.isFollowing);
+        const response = await getSavedPosts({
+          page: 1,
+          limit: 20,
+        });
+
+        const savedPostsData = response.data?.data || [];
+
+        setSavedPosts(savedPostsData);
       } catch (err) {
-        console.error("Failed to check follow status:", err);
+        console.error("Failed to fetch saved posts:", err);
+        setSavedPosts([]);
       }
     };
 
-    checkFollowStatus();
-  }, [isOwnProfile, targetUserId, currentUserId]);
+    loadSavedPosts();
+  }, [activeTab, isOwnProfile]);
 
   // ─── Handle follow/unfollow ───
   const handleFollow = async () => {
@@ -522,7 +506,6 @@ export default function Profile() {
 
   const userInitial = displayUser.name.charAt(0).toUpperCase();
   console.log("Profile user:", displayUser);
-  console.log("isOnline:", displayUser.isOnline);
 
   if (loading) return <ProfileSkeleton />;
 
@@ -801,7 +784,7 @@ export default function Profile() {
             ? [
                 {
                   key: "Saved",
-                  label: t("Saved Posts"),
+                  label: t("tabs.savedPosts", { defaultValue: "Saved Posts" }),
                   icon: <Bookmark size={16} />,
                 },
               ]
@@ -814,7 +797,9 @@ export default function Profile() {
         ].map(({ key, label, icon }) => (
           <button
             key={key}
-            onClick={() => setActiveTab(key)}
+            onClick={() => {
+              setActiveTab(key);
+            }}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-xs font-semibold rounded-xl transition-all ${
               activeTab === key
                 ? "bg-gradient-to-r from-[#8b5cf6] to-[#a78bfa] text-white shadow-lg shadow-purple-500/20"

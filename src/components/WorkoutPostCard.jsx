@@ -1,9 +1,6 @@
 import { Heart, Clock, Dumbbell, Flame } from "lucide-react";
 
 // Category → accent color, so the pill on the image ties to something
-// meaningful (matches the purple/orange/yellow accents already used
-// elsewhere in the app for Strength/Cardio/etc.) rather than being
-// decorative. Falls back to purple for anything unrecognized.
 const CATEGORY_ACCENT = {
   Strength: "bg-purple-400",
   Cardio: "bg-pink-400",

@@ -722,9 +722,13 @@ export const updateWorkoutService = async ({ workoutId, userId, body }) => {
 
     await workout.save({ session });
 
+    // const post = await Post.findOne({
+    //   user: userId,
+    //   "workout.workoutId": workout._id,
+    // }).session(session);
+
     const post = await Post.findOne({
-      user: userId,
-      "workout.workoutId": workout._id,
+  "workout.workoutId": workout._id,
     }).session(session);
 
     if (!post) {

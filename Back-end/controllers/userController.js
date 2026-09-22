@@ -1,3 +1,7 @@
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendSuccess } from "../utils/apiResponse.js";
+import { BadRequestError } from "../errors/ApiError.js";
+
 
 // Services
 import {
@@ -11,189 +15,104 @@ import {
 } from "../services/userService.js";
 
 
-// Refactored: Get user profile by ID
-export const getUserProfileById = async (req, res) => {
-  try {
-    const user = await getUserProfileByIdService(
-      req.params.id,
-      req.user._id
-    );
+// Get user profile by ID
+export const getUserProfileById = asyncHandler(async (req, res) => {
 
-    return res.status(200).json({
-      success: true,
-      user,
-    });
-  } catch (error) {
-    console.error("Get profile error:", error);
+  const user = await getUserProfileByIdService(
+    req.params.id,
+    req.user._id
+  );
 
-    return res.status(error.statusCode || 500).json({
-      message: error.message || "Failed to get profile",
-    });
-  }
-};
-       // Refactored: Get user profile by ID
-        export const getUserPostsById = async (req, res) => {
-        try {
-          const { id } = req.params;
+  return sendSuccess(res, {
+    data: { user },
+  });
+});
 
-          const page = parseInt(req.query.page) || 1;
-          const limit = parseInt(req.query.limit) || 20;
+// Get user posts by ID
+export const getUserPostsById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-          const result = await getUserPostsByIdService(
-            id,
-            req.user._id,
-            page,
-            limit
-          );
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 20;
 
-          return res.status(200).json({
-            success: true,
-            ...result,
-          });
-        } catch (error) {
-          console.error("Get user posts error:", error);
+  const result = await getUserPostsByIdService(
+    id,
+    req.user._id,
+    page,
+    limit
+  );
 
-          return res.status(error.statusCode || 500).json({
-            message: error.message || "Failed to get posts",
-          });
-        }
-      };
+  return sendSuccess(res, {
+    data: result.posts,
+    pagination: result.pagination,
+  });
+});
 
 
 // Refactored: Update user profile
-export const updateProfile = async (req, res) => {
-  try {
-    const user = await updateUserProfileService(
-      req.user._id,
-      req.body
-    );
+export const updateProfile = asyncHandler(async (req, res) => {
+  const user = await updateUserProfileService(
+    req.user._id,
+    req.body
+  );
 
-    return res.status(200).json({
-      success: true,
+  return sendSuccess(res, {
+    data: {
       user,
-    });
-  } catch (error) {
-    console.error("Update profile error:", error);
-
-    return res.status(error.statusCode || 500).json({
-      message: error.message || "Failed to update profile",
-    });
-  }
-};
+    },
+  });
+});
 
 
 // Refactored: Upload profile avatar
-export const uploadAvatar = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    if (!req.file) {
-      return res.status(400).json({
-        message: "No file uploaded",
-      });
-    }
-
-    const result = await uploadUserAvatarService(
-      userId,
-      req.file.buffer
-    );
-
-    return res.status(200).json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    console.error("Upload avatar error:", error);
-
-    return res.status(error.statusCode || 500).json({
-      message: error.message || "Failed to upload avatar",
-    });
+export const uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new BadRequestError("No file uploaded");
   }
-};
+
+  const result = await uploadUserAvatarService(
+    req.user._id,
+    req.file.buffer
+  );
+
+  return sendSuccess(res, {
+    data: result,
+  });
+});
 
 // Refactored:  Delete user account
-export const deleteAccount = async (req, res) => {
-  try {
-    const userId = req.user._id;
+export const deleteAccount = asyncHandler(async (req, res) => {
+  await deleteUserAccountService(req.user._id);
 
-    await deleteUserAccountService(userId);
-
-    res.json({
-      success: true,
-      message: "Account deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete account error:", error);
-    res.status(500).json({
-      message: "Failed to delete account",
-      error: error.message,
-    });
-  }
-};
+  return sendSuccess(res, {
+    message: "Account deleted successfully",
+  });
+});
 
 // Refactored: Send email verification
-export const requestEmailVerification = async (req, res) => {
-  try {
-    const result = await requestEmailVerificationService(
-      req.user._id
-    );
+export const requestEmailVerification = asyncHandler(async (req, res) => {
+  const result = await requestEmailVerificationService(
+    req.user._id
+  );
 
-    if (!result.success) {
-      return res.status(result.status).json({
-        success: false,
-        message: result.message,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: result.message,
-    });
-
-  } catch (error) {
-    console.error("Verification email error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to send verification email",
-      error: error.message,
-    });
-  }
-};
+  return sendSuccess(res, {
+    message: result.message,
+  });
+});
 
 // Refactored: Confirm email verification
-export const confirmEmailVerification = async (req, res) => {
-  try {
-    const { token } = req.body;
+export const confirmEmailVerification = asyncHandler(async (req, res) => {
+  const { token } = req.body;
 
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: "Verification token is required",
-      });
-    }
-
-    const result = await confirmEmailVerificationService(token);
-
-    if (!result.success) {
-      return res.status(result.status).json({
-        success: false,
-        message: result.message,
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: result.message,
-    });
-
-  } catch (error) {
-    console.error("Email confirmation error:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Email verification failed",
-      error: error.message,
-    });
+  if (!token) {
+    throw new BadRequestError(
+      "Verification token is required"
+    );
   }
-};
+
+  const result = await confirmEmailVerificationService(token);
+
+  return sendSuccess(res, {
+    message: result.message,
+  });
+});

@@ -18,6 +18,8 @@ import {
   updateProfile,
   uploadAvatar,
   deleteAccount,
+  requestEmailVerification,
+  confirmEmailVerification,
 } from "../controllers/userController.js";
 import { setUserGoal } from "../controllers/goalController.js";
 

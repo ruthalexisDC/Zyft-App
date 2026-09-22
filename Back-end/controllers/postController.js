@@ -2,15 +2,11 @@
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { sendSuccess } from '../utils/apiResponse.js';
 import {
-  NotFoundError,
-  ForbiddenError,
   BadRequestError,
   UnauthorizedError,
 } from '../errors/ApiError.js';
 import User from "../models/User.js";
-import Comment, { REACTION_EMOJIS } from '../models/Comments.js';
-
-import { buildCommentTree } from "../utils/commentUtils.js";
+import { REACTION_EMOJIS } from '../models/Comments.js';
 
 
 //Service 
@@ -206,10 +202,6 @@ export const getPost = asyncHandler(async (req, res) => {
     canViewPostWithOriginal,
   });
 
-  if (!result) {
-    throw new NotFoundError("Post not found");
-  }
-
   return sendSuccess(res, {
     data: result,
   });
@@ -276,10 +268,6 @@ export const getUserPosts = asyncHandler(async (req, res) => {
     updates,
   });
 
-  if (!updatedPost) {
-    throw new NotFoundError("Post not found");
-  }
-
   return sendSuccess(res, {
     data: updatedPost,
   });
@@ -290,16 +278,11 @@ export const getUserPosts = asyncHandler(async (req, res) => {
 export const deletePost = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
-  const deleted = await deletePostService({
+  await deletePostService({
     postId,
     userId: req.user._id,
   });
 
-  if (!deleted) {
-    throw new NotFoundError("Post not found");
-  }
-
-  // 204 responses must have an empty body.
   return res.status(204).send();
 });
 
@@ -316,9 +299,7 @@ export const deletePost = asyncHandler(async (req, res) => {
     canViewPostWithOriginal,
   });
 
-  if (!result) {
-    throw new NotFoundError("Post not found");
-  }
+
 
   return sendSuccess(res, {
     data: result,
@@ -335,10 +316,6 @@ export const getRespects = asyncHandler(async (req, res) => {
     currentUserId: req.user._id,
     canViewPostWithOriginal,
   });
-
-  if (!users) {
-    throw new NotFoundError("Post not found");
-  }
 
   return sendSuccess(res, {
     data: users,
@@ -376,11 +353,6 @@ export const addComment = asyncHandler(async (req, res) => {
     canViewPostWithOriginal,
   });
 
-  if (!comment) {
-    throw new NotFoundError(
-      "Post not found"
-    );
-  }
 
   return sendSuccess(res, {
     statusCode: 201,
@@ -394,15 +366,12 @@ export const getComments = asyncHandler(async (req, res) => {
   const { postId } = req.params;
 
   const comments = await getCommentsService({
-    postId,
-    userId: req.user._id,
-    canViewPostWithOriginal,
-    buildCommentTree,
-  });
+  postId,
+  userId: req.user._id,
+  canViewPostWithOriginal,
+});
 
-  if (!comments) {
-    throw new NotFoundError("Post not found");
-  }
+
 
   return sendSuccess(res, {
     data: comments,
@@ -415,14 +384,10 @@ export const getComments = asyncHandler(async (req, res) => {
 export const deleteComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
 
-  const deleted = await deleteCommentService({
+  await deleteCommentService({
     commentId,
     userId: req.user._id,
   });
-
-  if (!deleted) {
-    throw new NotFoundError("Comment not found");
-  }
 
   return res.status(204).send();
 });
@@ -458,11 +423,6 @@ export const updateComment = asyncHandler(async (req, res) => {
       content,
     });
 
-  if (!comment) {
-    throw new NotFoundError(
-      "Comment not found"
-    );
-  }
 
   return sendSuccess(res, {
     data: comment,
@@ -475,41 +435,23 @@ export const updateComment = asyncHandler(async (req, res) => {
 export const reactToComment = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
   const { emoji } = req.body;
-
   const userId = req.user._id;
 
   if (!REACTION_EMOJIS.includes(emoji)) {
-    throw new BadRequestError(
-      "Invalid reaction emoji"
-    );
+    throw new BadRequestError("Invalid reaction emoji");
   }
 
-  const result =
-    await reactToCommentService({
-      commentId,
-      userId,
-      emoji,
-      canViewPostWithOriginal,
-    });
-
-  if (result.notFound === "comment") {
-    throw new NotFoundError(
-      "Comment not found"
-    );
-  }
-
-  if (result.notFound === "post") {
-    throw new NotFoundError(
-      "Post not found"
-    );
-  }
+  const result = await reactToCommentService({
+    commentId,
+    userId,
+    emoji,
+    canViewPostWithOriginal,
+  });
 
   return sendSuccess(res, {
     data: {
-      reactionSummary:
-        result.reactionSummary,
-      myReaction:
-        result.myReaction,
+      reactionSummary: result.reactionSummary,
+      myReaction: result.myReaction,
     },
   });
 });
@@ -527,9 +469,6 @@ export const repost = asyncHandler(async (req, res) => {
     canViewPost,
   });
 
-  if (result.notFound === "post") {
-    throw new NotFoundError("Post not found");
-  }
 
   return sendSuccess(res, {
     statusCode: result.reposted ? 201 : 200,
@@ -588,14 +527,6 @@ export const savePost = asyncHandler(async (req, res) => {
     canViewPostWithOriginal,
   });
 
-  if (result.notFound === "post") {
-    throw new NotFoundError("Post not found");
-  }
-
-  if (result.notFound === "user") {
-    throw new NotFoundError("User not found");
-  }
-
   return sendSuccess(res, {
     data: {
       saved: result.saved,
@@ -615,9 +546,6 @@ export const unsavePost = asyncHandler(async (req, res) => {
     userId,
   });
 
-  if (result.notFound === "user") {
-    throw new NotFoundError("User not found");
-  }
 
   return sendSuccess(res, {
     data: {
@@ -636,9 +564,7 @@ export const hidePost = asyncHandler(async (req, res) => {
     userId: req.user._id,
   });
 
-  if (result.notFound === "user") {
-    throw new NotFoundError("User not found");
-  }
+
 
   return sendSuccess(res, {
     data: {
@@ -655,10 +581,6 @@ export const unhidePost = asyncHandler(async (req, res) => {
     postId: req.params.postId,
     userId: req.user._id,
   });
-
-  if (result.notFound === "user") {
-    throw new NotFoundError("User not found");
-  }
 
   return sendSuccess(res, {
     data: {
@@ -679,9 +601,6 @@ export const reportPost = asyncHandler(async (req, res) => {
     reason,
   });
 
-  if (result.notFound === "post") {
-    throw new NotFoundError("Post not found");
-  }
 
   return sendSuccess(res, {
     statusCode: 201,
@@ -698,10 +617,6 @@ export const trackShare = asyncHandler(async (req, res) => {
     userId: req.user._id,
     canViewPostWithOriginal,
   });
-
-  if (result.notFound === "post") {
-    throw new NotFoundError("Post not found");
-  }
 
   return sendSuccess(res, {
     data: {

@@ -7,6 +7,7 @@ import Report from "../models/Report.js";
 import {
   BadRequestError,
   ForbiddenError,
+  NotFoundError,
 } from "../errors/ApiError.js";
 
 
@@ -265,9 +266,9 @@ export const getPostService = async ({
     )
     .populate("originalPost");
 
-  if (!post) {
-    return null;
-  }
+ if (!post) {
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -494,28 +495,20 @@ export const getUserPostsService = async ({
   };
 };
 
-  // Service: Get Saved Posts
+
+// Service: Get Saved Posts
 export const getSavedPostsService = async ({
   userId,
   pageNumber,
   limitNumber,
   canViewPostWithOriginal,
 }) => {
-  // Get current user and their saved post IDs
   const currentUser = await User.findById(userId).select(
     "savedPosts following show_active_status"
   );
 
   if (!currentUser) {
-    return {
-      posts: [],
-      pagination: {
-        currentPage: pageNumber,
-        totalPages: 0,
-        totalPosts: 0,
-        hasMore: false,
-      },
-    };
+    throw new NotFoundError("User not found");
   }
 
   const savedPostIds = currentUser.savedPosts || [];
@@ -540,83 +533,111 @@ export const getSavedPostsService = async ({
     currentUser.show_active_status !== false;
 
   /*
-   * Fetch all saved posts.
+   * Saved posts are stored as IDs on the User document.
    *
-   * We intentionally fetch using _id instead of user because
-   * saved posts can belong to any user.
-   */
-  const posts = await Post.find({
-    _id: {
-      $in: savedPostIds,
-    },
-  })
-    .populate(
-      "user",
-      "name handle avatar last_active_at show_active_status isOnline"
-    )
-    .populate("workout")
-    .populate("originalPost")
-    .lean();
-
-  /*
-   * Re-create the user's savedPosts order.
+   * We process them in batches instead of loading every
+   * saved post into memory at once.
    *
-   * This makes the Saved tab follow the order in which
-   * posts were saved rather than MongoDB's arbitrary order.
-   *
-   * Newest saved post appears first.
+   * Reverse the IDs so the newest saved post appears first.
    */
-  const postMap = new Map(
-    posts.map((post) => [
-      post._id.toString(),
-      post,
-    ])
-  );
+  const orderedSavedPostIds = [...savedPostIds].reverse();
 
-  const orderedPosts = [...savedPostIds]
-    .reverse()
-    .map((id) => postMap.get(id.toString()))
-    .filter(Boolean);
+  const BATCH_SIZE = Math.max(limitNumber * 2, 20);
 
-  /*
-   * Remove posts that:
-   * - no longer have an existing author
-   * - are no longer visible to the current user
-   * - have an inaccessible original post if they are reposts
-   */
-  const visiblePosts = [];
+  let databaseIndex = 0;
+  let visiblePosts = [];
 
-  for (const post of orderedPosts) {
-    if (!post.user) {
-      continue;
-    }
+  while (databaseIndex < orderedSavedPostIds.length) {
+    const batchIds = orderedSavedPostIds.slice(
+      databaseIndex,
+      databaseIndex + BATCH_SIZE
+    );
 
-    const allowed =
-      await canViewPostWithOriginal(
+    const posts = await Post.find({
+      _id: {
+        $in: batchIds,
+      },
+    })
+      .populate(
+        "user",
+        "name handle avatar last_active_at show_active_status isOnline"
+      )
+      .populate("workout")
+      .populate("originalPost")
+      .lean();
+
+    const postMap = new Map(
+      posts.map((post) => [
+        post._id.toString(),
+        post,
+      ])
+    );
+
+    /*
+     * Restore savedPosts order because MongoDB does not
+     * guarantee the order of $in results.
+     */
+    const orderedBatch = batchIds
+      .map((id) => postMap.get(id.toString()))
+      .filter(Boolean);
+
+    /*
+     * Check whether each saved post is still visible.
+     */
+    for (const post of orderedBatch) {
+      if (!post.user) {
+        continue;
+      }
+
+      const allowed = await canViewPostWithOriginal(
         post,
         userId
       );
 
-    if (!allowed) {
-      continue;
+      if (!allowed) {
+        continue;
+      }
+
+      visiblePosts.push(post);
     }
 
-    visiblePosts.push(post);
+    databaseIndex += batchIds.length;
+
+    /*
+     * We only need enough visible posts to build
+     * the requested page plus one extra post.
+     *
+     * The extra post lets us determine hasMore.
+     */
+    const requiredPosts =
+      pageNumber * limitNumber + 1;
+
+    if (visiblePosts.length >= requiredPosts) {
+      break;
+    }
   }
 
-  const totalPosts = visiblePosts.length;
-
-  const skip =
+  /*
+   * Determine the requested page from the visible posts.
+   */
+  const startIndex =
     (pageNumber - 1) * limitNumber;
 
   const pagePosts = visiblePosts.slice(
-    skip,
-    skip + limitNumber
+    startIndex,
+    startIndex + limitNumber
   );
 
   /*
-   * Build the same response information used by
-   * the feed/profile post cards.
+   * If we stopped early because we found enough posts,
+   * there is another page.
+   */
+  const hasMore =
+    visiblePosts.length >
+    startIndex + limitNumber;
+
+  /*
+   * Build response data.
    */
   const postsWithData = await Promise.all(
     pagePosts.map(async (post) => {
@@ -639,7 +660,6 @@ export const getSavedPostsService = async ({
       return {
         ...post,
 
-        // Important for FeedPostCard
         isSaved: true,
 
         respectCount:
@@ -679,20 +699,35 @@ export const getSavedPostsService = async ({
     })
   );
 
+  /*
+   * totalPosts is the number of visible saved posts
+   * that we have evaluated so far.
+   *
+   * If we processed every saved post, this is the
+   * complete total.
+   *
+   * If we stopped early, we intentionally don't claim
+   * an exact total.
+   */
+  const processedAllPosts =
+    databaseIndex >= orderedSavedPostIds.length;
+
+  const totalPosts = processedAllPosts
+    ? visiblePosts.length
+    : undefined;
+
   return {
     posts: postsWithData,
 
     pagination: {
       currentPage: pageNumber,
-      totalPages:
-        Math.ceil(
+      ...(totalPosts !== undefined && {
+        totalPages: Math.ceil(
           totalPosts / limitNumber
         ),
-      totalPosts,
-
-      hasMore:
-        skip + pagePosts.length <
         totalPosts,
+      }),
+      hasMore,
     },
   };
 };
@@ -706,9 +741,9 @@ export const updatePostService = async ({
 }) => {
   const post = await Post.findById(postId);
 
-  if (!post) {
-    return null;
-  }
+if (!post) {
+  throw new NotFoundError("Post not found");
+}
 
   if (post.user.toString() !== userId.toString()) {
     throw new ForbiddenError(
@@ -737,9 +772,8 @@ export const deletePostService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-    return null;
-  }
-
+  throw new NotFoundError("Post not found");
+}
   if (post.user.toString() !== userId.toString()) {
     throw new ForbiddenError(
       "You can only delete your own posts"
@@ -849,9 +883,9 @@ export const getRespectsService = async ({
     "name handle avatar bio followers"
   );
 
-  if (!post) {
-    return null;
-  }
+ if (!post) {
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -895,8 +929,8 @@ export const addCommentService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-    return null;
-  }
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -992,9 +1026,9 @@ export const getCommentsService = async ({
 }) => {
   const post = await Post.findById(postId);
 
-  if (!post) {
-    return null;
-  }
+ if (!post) {
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -1029,8 +1063,8 @@ export const deleteCommentService = async ({
   const comment = await Comment.findById(commentId);
 
   if (!comment) {
-    return null;
-  }
+  throw new NotFoundError("Comment not found");
+}
 
   if (
     comment.user.toString() !==
@@ -1060,9 +1094,9 @@ export const updateCommentService = async ({
 }) => {
   const comment = await Comment.findById(commentId);
 
-  if (!comment) {
-    return null;
-  }
+ if (!comment) {
+  throw new NotFoundError("Comment not found");
+}
 
   if (
     comment.user.toString() !==
@@ -1103,19 +1137,15 @@ export const reactToCommentService = async ({
 }) => {
   const comment = await Comment.findById(commentId);
 
-  if (!comment) {
-    return {
-      notFound: "comment",
-    };
-  }
+if (!comment) {
+  throw new NotFoundError("Comment not found");
+}
 
   const post = await Post.findById(comment.post);
 
-  if (!post) {
-    return {
-      notFound: "post",
-    };
-  }
+ if (!post) {
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -1179,10 +1209,8 @@ export const repostService = async ({
   const originalPost = await Post.findById(postId);
 
   if (!originalPost) {
-    return {
-      notFound: "post",
-    };
-  }
+  throw new NotFoundError("Post not found");
+}
 
   // 2. Do not allow nested reposts
   if (originalPost.isRepost) {
@@ -1297,10 +1325,8 @@ export const savePostService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-    return {
-      notFound: "post",
-    };
-  }
+  throw new NotFoundError("Post not found");
+}
 
   // 2. User must be able to view the post
   const allowed = await canViewPostWithOriginal(
@@ -1318,10 +1344,8 @@ export const savePostService = async ({
   const user = await User.findById(userId);
 
   if (!user) {
-    return {
-      notFound: "user",
-    };
-  }
+  throw new NotFoundError("User not found");
+}
 
   // 4. Check whether post is already saved
   const alreadySaved = user.savedPosts.some(
@@ -1350,10 +1374,8 @@ export const unsavePostService = async ({
   const user = await User.findById(userId);
 
   if (!user) {
-    return {
-      notFound: "user",
-    };
-  }
+  throw new NotFoundError("User not found");
+}
 
   // 2. Remove post from savedPosts
   user.savedPosts = user.savedPosts.filter(
@@ -1376,10 +1398,8 @@ export const hidePostService = async ({
   const user = await User.findById(userId);
 
   if (!user) {
-    return {
-      notFound: "user",
-    };
-  }
+  throw new NotFoundError("User not found");
+}
 
   const alreadyHidden = user.hiddenPosts.some(
     (id) =>
@@ -1404,11 +1424,9 @@ export const unhidePostService = async ({
 }) => {
   const user = await User.findById(userId);
 
-  if (!user) {
-    return {
-      notFound: "user",
-    };
-  }
+ if (!user) {
+  throw new NotFoundError("User not found");
+}
 
   user.hiddenPosts = user.hiddenPosts.filter(
     (id) =>
@@ -1430,10 +1448,8 @@ export const reportPostService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-    return {
-      notFound: "post",
-    };
-  }
+  throw new NotFoundError("Post not found");
+}
 
   const report = await Report.create({
     post: postId,
@@ -1457,10 +1473,8 @@ export const trackShareService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-    return {
-      notFound: "post",
-    };
-  }
+  throw new NotFoundError("Post not found");
+}
 
   const allowed = await canViewPostWithOriginal(
     post,

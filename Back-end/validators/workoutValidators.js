@@ -15,17 +15,19 @@ export const createWorkoutSchema = z.object({
       .optional(),
 
     duration: z
-      .number({
-        message: "Duration must be a number",
-      })
+  .coerce
+  .number({
+    message: "Duration must be a number",
+  })
       .finite("Duration must be a finite number")
       .min(0, "Duration cannot be negative")
       .optional(),
 
-    caloriesBurned: z
-      .number({
-        message: "Calories burned must be a number",
-      })
+  caloriesBurned: z
+  .coerce
+  .number({
+    message: "Calories burned must be a number",
+  })
       .finite("Calories burned must be a finite number")
       .min(0, "Calories burned cannot be negative")
       .optional(),
@@ -67,23 +69,26 @@ export const createWorkoutSchema = z.object({
             ),
 
           sets: z
-            .number({
-              message: "Sets must be a number",
-            })
+  .coerce
+  .number({
+    message: "Sets must be a number",
+  })
             .int("Sets must be a whole number")
             .min(1, "Sets must be at least 1"),
 
           reps: z
-            .number({
-              message: "Reps must be a number",
-            })
+  .coerce
+  .number({
+    message: "Reps must be a number",
+  })
             .int("Reps must be a whole number")
             .min(0, "Reps cannot be negative"),
 
-          weight: z
-            .number({
-              message: "Weight must be a number",
-            })
+         weight: z
+  .coerce
+  .number({
+    message: "Weight must be a number",
+  })
             .finite("Weight must be a finite number")
             .min(0, "Weight cannot be negative")
             .optional(),

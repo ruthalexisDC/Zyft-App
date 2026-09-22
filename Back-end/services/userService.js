@@ -1,30 +1,120 @@
 import User from "../models/User.js";
 import Post from "../models/Post.js";
 import Comment from "../models/Comments.js";
-import Workout from "../models/Workout.js"
+import Workout from "../models/Workout.js";
 import cloudinary from "../utils/cloudinary.js";
 import crypto from "crypto";
 import transporter from "../config/email.js";
+import {
+  BadRequestError,
+  NotFoundError,
+} from "../errors/ApiError.js";
+
+//HELPER 
+const canViewPost = async (post, viewerId) => {
+  if (!post || !viewerId) {
+    return false;
+  }
+
+  const postOwnerId = post.user?._id
+    ? post.user._id.toString()
+    : post.user?.toString();
+
+  if (!postOwnerId) {
+    return false;
+  }
+
+  const viewerIdString = viewerId.toString();
+
+  // Owner can always see their own post
+  if (postOwnerId === viewerIdString) {
+    return true;
+  }
+
+  // Public
+  if (post.visibility === "public") {
+    return true;
+  }
+
+  // Private
+  if (post.visibility === "private") {
+    return false;
+  }
+
+  // Followers only
+  if (post.visibility === "followers") {
+    const owner = await User.findById(postOwnerId)
+      .select("followers")
+      .lean();
+
+    if (!owner) {
+      return false;
+    }
+
+    return owner.followers.some(
+      (followerId) =>
+        followerId.toString() === viewerIdString
+    );
+  }
+
+  return false;
+};
+
+const canViewPostWithOriginal = async (post, viewerId) => {
+  if (!post) {
+    return false;
+  }
+
+  const canViewRequestedPost = await canViewPost(
+    post,
+    viewerId
+  );
+
+  if (!canViewRequestedPost) {
+    return false;
+  }
+
+  // Normal post
+  if (!post.isRepost) {
+    return true;
+  }
+
+  // Repost must have an original
+  if (!post.originalPost) {
+    return false;
+  }
+
+  // Viewer must also be allowed to see original
+  return canViewPost(
+    post.originalPost,
+    viewerId
+  );
+};
 
 
 // Service: Get user profile by ID
 export const getUserProfileById = async (userId, currentUserId) => {
+
   const user = await User.findById(userId)
     .select("-password -email");
 
+
   if (!user) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
-  }
+  throw new NotFoundError("User not found");
+}
+
+
 
   const postCount = await Post.countDocuments({
     user: user._id,
   });
 
-  const isFollowing = user.followers.some(
-    (id) => id.toString() === currentUserId.toString()
-  );
+  const isFollowing = Boolean(
+  currentUserId &&
+    user.followers.some(
+      (id) => id.toString() === currentUserId.toString()
+    )
+);
 
   const currentUser = await User.findById(currentUserId)
     .select("show_active_status");
@@ -59,52 +149,138 @@ export const getUserProfileById = async (userId, currentUserId) => {
   };
 };
 
-// Service: Get user post bi ID
+// Service: Get user post by ID
 export const getUserPostsById = async (
   userId,
   currentUserId,
   page = 1,
   limit = 20
 ) => {
-  const posts = await Post.find({ user: userId })
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit)
-    .populate(
-      "user",
-      "name handle avatar last_active_at isOnline show_active_status"
-    )
-    .lean();
+  // Make sure the requested user exists
+  const user = await User.findById(userId)
+    .select("_id");
 
-  const total = await Post.countDocuments({
-    user: userId,
-  });
+  if (!user) {
+    throw new NotFoundError("User not found");
+  }
 
-  const postsWithData = await Promise.all(
-    posts.map(async (post) => {
-      const commentCount = await Comment.countDocuments({
-        post: post._id,
-      });
+  const skip = (page - 1) * limit;
 
-      return {
-        ...post,
-        respectCount: post.respects?.length || 0,
-        commentCount,
-        didRespect:
-          post.respects?.some(
-            (r) => r.toString() === currentUserId.toString()
-          ) || false,
-      };
+  const BATCH_SIZE = Math.max(limit * 2, 20);
+
+  let databaseSkip = 0;
+  let visiblePosts = [];
+
+  const targetVisiblePosts = skip + limit;
+
+  while (visiblePosts.length < targetVisiblePosts) {
+    const posts = await Post.find({
+      user: userId,
     })
+      .sort({ createdAt: -1 })
+      .skip(databaseSkip)
+      .limit(BATCH_SIZE)
+      .populate(
+        "user",
+        "name handle avatar last_active_at isOnline show_active_status"
+      )
+      .populate("originalPost")
+      .lean();
+
+    if (posts.length === 0) {
+      break;
+    }
+
+    databaseSkip += posts.length;
+
+    const visibleBatch = [];
+
+    for (const post of posts) {
+      const canView = await canViewPostWithOriginal(
+        post,
+        currentUserId
+      );
+
+      if (canView) {
+        visibleBatch.push(post);
+      }
+    }
+
+    visiblePosts.push(...visibleBatch);
+
+    if (posts.length < BATCH_SIZE) {
+      break;
+    }
+  }
+
+  const pagePosts = visiblePosts.slice(
+    skip,
+    skip + limit
   );
+
+  // ─────────────────────────────────────
+  // BATCH COMMENT COUNTS
+  // ─────────────────────────────────────
+
+  const postIds = pagePosts.map(
+    (post) => post._id
+  );
+
+  const commentCounts = postIds.length
+    ? await Comment.aggregate([
+        {
+          $match: {
+            post: {
+              $in: postIds,
+            },
+          },
+        },
+        {
+          $group: {
+            _id: "$post",
+            count: {
+              $sum: 1,
+            },
+          },
+        },
+      ])
+    : [];
+
+  const commentCountMap = new Map(
+    commentCounts.map((item) => [
+      item._id.toString(),
+      item.count,
+    ])
+  );
+
+  const postsWithData = pagePosts.map((post) => ({
+    ...post,
+
+    respectCount:
+      post.respects?.length || 0,
+
+    commentCount:
+      commentCountMap.get(
+        post._id.toString()
+      ) || 0,
+
+    didRespect:
+      post.respects?.some(
+        (r) =>
+          r.toString() ===
+          currentUserId.toString()
+      ) || false,
+  }));
+
+  const hasMore =
+    visiblePosts.length > skip + limit;
 
   return {
     posts: postsWithData,
     pagination: {
       page,
       limit,
-      total,
-      pages: Math.ceil(total / limit),
+      hasMore,
     },
   };
 };
@@ -142,10 +318,8 @@ export const updateUserProfile = async (userId, profileData) => {
   ).select("-password");
 
   if (!user) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
-  }
+  throw new NotFoundError("User not found");
+}
 
   return {
     _id: user._id,
@@ -199,10 +373,8 @@ export const uploadUserAvatar = async (userId, fileBuffer) => {
   ).select("-password");
 
   if (!updatedUser) {
-    const error = new Error("User not found");
-    error.statusCode = 404;
-    throw error;
-  }
+  throw new NotFoundError("User not found");
+}
 
   return {
     avatar: avatarUrl,
@@ -223,8 +395,20 @@ export const uploadUserAvatar = async (userId, fileBuffer) => {
 
 // Service: Delete user account
 export const deleteUserAccountService = async (userId) => {
-  await Post.deleteMany({ user: userId });
-  await Workout.deleteMany({ user: userId });
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new NotFoundError("User not found");
+  }
+
+  await Post.deleteMany({
+    user: userId,
+  });
+
+  await Workout.deleteMany({
+    user: userId,
+  });
+
   await User.findByIdAndDelete(userId);
 
   return true;
@@ -234,21 +418,13 @@ export const deleteUserAccountService = async (userId) => {
 export const requestEmailVerificationService = async (userId) => {
   const user = await User.findById(userId);
 
-  if (!user) {
-    return {
-      success: false,
-      status: 404,
-      message: "User not found",
-    };
-  }
+ if (!user) {
+  throw new NotFoundError("User not found");
+}
 
-  if (user.isVerified) {
-    return {
-      success: false,
-      status: 400,
-      message: "Email is already verified",
-    };
-  }
+ if (user.isVerified) {
+  throw new BadRequestError("Email is already verified");
+}
 
   // Create verification token
   const verificationToken = crypto
@@ -326,12 +502,10 @@ export const confirmEmailVerificationService = async (token) => {
   });
 
   if (!user) {
-    return {
-      success: false,
-      status: 400,
-      message: "Invalid or expired verification token",
-    };
-  }
+  throw new BadRequestError(
+    "Invalid or expired verification token"
+  );
+}
 
   user.isVerified = true;
   user.emailVerifyToken = undefined;
