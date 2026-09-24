@@ -1,4 +1,4 @@
-import { ZodError } from "zod";
+import { sendError } from "../utils/apiResponse.js";
 
 export const validate = (schema) => {
   return (req, res, next) => {
@@ -14,11 +14,11 @@ export const validate = (schema) => {
         message: issue.message,
       }));
 
-      return res.status(400).json({
-        success: false,
-        message: "Validation failed",
-        errors,
-      });
+      return sendError(res, {
+      statusCode: 400,
+      message: "Validation failed",
+      errors,
+});
     }
 
     // Store validated data separately.

@@ -2,6 +2,7 @@
 import express from "express";
 import auth from "../middleware/authMiddleware.js";
 import Notification from "../models/Notification.js";
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 const router = express.Router();
 
@@ -16,12 +17,12 @@ router.get("/unread-count", auth, async (req, res) => {
       read: false,
     });
 
-    res.json({
-  count: countForUser,
+return sendSuccess(res, {
+    data: { count: countForUser },
 });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: err.message });
+    return sendError(res, { statusCode: 500, message: err.message });
   }
 });
 
@@ -76,9 +77,13 @@ router.get("/", auth, async (req, res) => {
       };
     });
 
-    res.json(shaped);
+return sendSuccess(res, {
+  data: shaped,
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res,{
+      statusCode: 500,
+      message: err.message });
   }
 });
 
@@ -90,10 +95,14 @@ router.patch("/:id/read", auth, async (req, res) => {
       { read: true },
       { new: true }
     );
-    if (!notif) return res.status(404).json({ message: "Not found" });
-    res.json({ success: true });
+    if (!notif) return sendError(res, {
+       statusCode: 404,
+      message: "Not found" 
+    });
+    
+    return sendSuccess(res);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, { statusCode: 500, message: err.message });
   }
 });
 
@@ -104,9 +113,12 @@ router.patch("/read-all", auth, async (req, res) => {
       { recipient: req.user._id, read: false },
       { read: true }
     );
-    res.json({ success: true });
+    return sendSuccess(res);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -117,9 +129,12 @@ router.delete("/:id", auth, async (req, res) => {
       _id: req.params.id,
       recipient: req.user._id,
     });
-    res.json({ success: true });
+    return sendSuccess(res);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+   return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 

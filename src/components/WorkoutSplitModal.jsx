@@ -77,7 +77,7 @@ const WorkoutSplitModal = ({ isOpen, onClose, userId, onSave }) => {
     setSaved(false);
 
     try {
-      const res = await api.put(`/users/${userId}/split`, { split });
+      const res = await api.patchForm(`/users/${userId}/split`, { split });
       setSaved(true);
       onSave?.(res.data);
       setTimeout(() => {

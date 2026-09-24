@@ -2,6 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
 
+
 import auth from "../middleware/authMiddleware.js";
 import User from "../models/User.js";
 import Notification from "../models/Notification.js";
@@ -18,10 +19,10 @@ import {
   updateProfile,
   uploadAvatar,
   deleteAccount,
-  requestEmailVerification,
-  confirmEmailVerification,
 } from "../controllers/userController.js";
 import { setUserGoal } from "../controllers/goalController.js";
+
+import { sendSuccess, sendError } from "../utils/apiResponse.js";
 
 // Was `multer({ storage: multer.memoryStorage() })` with no limits or
 // fileFilter — any authenticated user could upload an arbitrarily large
@@ -60,39 +61,27 @@ function timeAgo(date) {
 // ═══════════════════════════════════════════════════════
 
 // GET /api/users/me - Get current user
-// router.get("/me", auth, async (req, res) => {
-//   try {
-//     const user = await User.findById(req.user._id).select("-password");
-//     res.json({ user });
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to fetch user" });
-//   }
-// });
-
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .select("-password");
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+      return sendError(res, {
+      statusCode: 404,
+      message: "User not found",
+});
     }
 
-    return res.status(200).json({
-      success: true,
+      return sendSuccess(res, {
       message: "Profile retrieved successfully",
-      data: {
-        user,
-      },
+      data: { user },
     });
   } catch (err) {
     console.error("Get current user error:", err);
 
-    return res.status(500).json({
-      success: false,
+      return sendError(res, {
+      statusCode: 500,
       message: "Failed to fetch user",
     });
   }
@@ -105,9 +94,16 @@ router.post("/heartbeat", auth, async (req, res) => {
   try {
     const now = new Date();
     await User.findByIdAndUpdate(req.user._id, { last_active_at: now });
-    res.json({ ok: true, lastActiveAt: now.toISOString() });
+   return sendSuccess(res, {
+  data: {
+    lastActiveAt: now.toISOString(),
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+   return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -116,7 +112,12 @@ router.post("/heartbeat", auth, async (req, res) => {
 router.patch("/active-status", auth, validate(updateActiveStatusSchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+   if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     user.show_active_status =
       typeof req.body.showActiveStatus === "boolean"
@@ -124,9 +125,16 @@ router.patch("/active-status", auth, validate(updateActiveStatusSchema), async (
         : !user.show_active_status;
     await user.save();
 
-    res.json({ showActiveStatus: user.show_active_status });
+   return sendSuccess(res, {
+  data: {
+    showActiveStatus: user.show_active_status,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -137,15 +145,27 @@ router.patch("/goal", auth, validate(setUserGoalSchema), setUserGoal);
 router.patch("/privacy", auth, validate(updatePrivacySchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     // Body can pass an explicit value, or omit it to just toggle
     user.isPrivate = typeof req.body.isPrivate === "boolean" ? req.body.isPrivate : !user.isPrivate;
     await user.save();
 
-    res.json({ isPrivate: user.isPrivate });
+   return sendSuccess(res, {
+  data: {
+    isPrivate: user.isPrivate,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+   return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -153,13 +173,28 @@ router.patch("/privacy", auth, validate(updatePrivacySchema), async (req, res) =
 router.get("/notification-preferences", auth, validate(updateNotificationPreferencesSchema), async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select("notificationPreferences");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return sendError(res, {
+        statusCode: 404,
+        message: "User not found",
+      });
+    }
 
-    res.json({
-      preferences: user.notificationPreferences || { respect: true, comment: true, follow: true },
-    });
+    return sendSuccess(res, {
+  data: {
+    preferences:
+      user.notificationPreferences || {
+        respect: true,
+        comment: true,
+        follow: true,
+      },
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -167,7 +202,12 @@ router.get("/notification-preferences", auth, validate(updateNotificationPrefere
 router.patch("/notification-preferences", auth, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    if (!user) return res.status(404).json({ message: "User not found" });
+   if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     const allowedKeys = ["respect", "comment", "follow"];
     for (const key of allowedKeys) {
@@ -177,9 +217,16 @@ router.patch("/notification-preferences", auth, async (req, res) => {
     }
 
     await user.save();
-    res.json({ preferences: user.notificationPreferences });
+   return sendSuccess(res, {
+  data: {
+    preferences: user.notificationPreferences,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -195,9 +242,16 @@ router.get("/suggested", auth, async (req, res) => {
       isFollowing: u.followers.some((id) => id.toString() === req.user._id.toString()),
     }));
 
-    res.json({ users: shaped });
+    return sendSuccess(res, {
+  data: {
+    users: shaped,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -205,7 +259,7 @@ router.get("/suggested", auth, async (req, res) => {
 // PROFILE ROUTES
 // ═══════════════════════════════════════════════════════
 
-router.put("/profile", auth, validate(updateProfileSchema), updateProfile);
+router.patch("/profile", auth, validate(updateProfileSchema), updateProfile);
 // multer's errors (file too large, wrong type) are thrown inside its own
 // middleware — without catching them here they'd surface as an unhandled
 // error / generic 500 instead of a clean 400 response.
@@ -213,17 +267,30 @@ const handleAvatarUpload = (req, res, next) => {
   upload.single("photo")(req, res, (err) => {
     if (err instanceof multer.MulterError) {
       if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(400).json({ message: "Image must be smaller than 5MB" });
+        return sendError(res, {
+          statusCode: 400,
+          message: "Image must be smaller than 5MB",
+        });
       }
-      return res.status(400).json({ message: err.message });
-    } else if (err) {
-      return res.status(400).json({ message: err.message });
+
+      return sendError(res, {
+        statusCode: 400,
+        message: err.message,
+      });
     }
+
+    if (err) {
+      return sendError(res, {
+        statusCode: 400,
+        message: err.message,
+      });
+    }
+
     next();
   });
 };
 
-router.put("/avatar", auth, handleAvatarUpload, uploadAvatar);
+router.patch("/avatar", auth, handleAvatarUpload, uploadAvatar);
 router.delete("/account", auth, deleteAccount);
 
 // ═══════════════════════════════════════════════════════
@@ -239,15 +306,21 @@ router.post("/id/:id/follow", auth, async (req, res) => {
     const currentUserId = req.user.id || req.user._id;
 
     if (targetId === currentUserId.toString()) {
-      return res.status(400).json({ message: "Can't follow yourself" });
-    }
+  return sendError(res, {
+    statusCode: 400,
+    message: "Can't follow yourself",
+  });
+}
 
     const targetUser = await User.findById(targetId);
     const currentUser = await User.findById(currentUserId);
 
     if (!targetUser || !currentUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     const isFollowing = targetUser.followers.some((id) => id.toString() === currentUserId.toString());
 
@@ -289,13 +362,18 @@ router.post("/id/:id/follow", auth, async (req, res) => {
 
     const refreshedTarget = await User.findById(targetId).select("followers following");
 
-    res.json({
-      following: !isFollowing,
-      followersCount: refreshedTarget.followers.length,
-      followingCount: refreshedTarget.following.length,
-    });
+    return sendSuccess(res, {
+  data: {
+    following: !isFollowing,
+    followersCount: refreshedTarget.followers.length,
+    followingCount: refreshedTarget.following.length,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+  return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -303,13 +381,29 @@ router.get("/id/:id/follow-status", auth, async (req, res) => {
   try {
     const targetUser = await User.findById(req.params.id);
 
-    if (!targetUser) return res.status(404).json({ message: "User not found" });
+    if (!targetUser) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
-    const currentUserId = (req.user.id || req.user._id).toString();
-    const isFollowing = targetUser.followers.some((id) => id.toString() === currentUserId);
-    res.json({ isFollowing });
+const currentUserId = (req.user.id || req.user._id).toString();
+
+const isFollowing = targetUser.followers.some(
+  (id) => id.toString() === currentUserId
+);
+
+return sendSuccess(res, {
+  data: {
+    isFollowing,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -323,7 +417,12 @@ router.get("/id/:id/followers", auth, async (req, res) => {
       "name handle avatar bio followers"
     );
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     const list = user.followers.map((u) => ({
       id: u._id,
@@ -334,9 +433,16 @@ router.get("/id/:id/followers", auth, async (req, res) => {
       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
     }));
 
-    res.json({ users: list });
+    return sendSuccess(res, {
+  data: {
+    users: list,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -350,7 +456,12 @@ router.get("/id/:id/following", auth, async (req, res) => {
       "name handle avatar bio followers"
     );
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     const list = user.following.map((u) => ({
       id: u._id,
@@ -361,9 +472,16 @@ router.get("/id/:id/following", auth, async (req, res) => {
       isFollowing: u.followers?.some((id) => id.toString() === currentUserId) || false,
     }));
 
-    res.json({ users: list });
+    return sendSuccess(res, {
+  data: {
+    users: list,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+  statusCode: 500,
+  message: err.message,
+});
   }
 });
 
@@ -376,39 +494,57 @@ router.get("/id/:id/following", auth, async (req, res) => {
 router.get("/:id/split", auth, async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.id) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
+  return sendError(res, {
+    statusCode: 403,
+    message: "Unauthorized",
+  });
+}
 
     const user = await User.findById(req.params.id).select("workoutSplit");
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
-    res.json({
-      split: user.workoutSplit || Array(7).fill("Rest"),
+   return sendSuccess(res, {
+  data: {
+    split: user.workoutSplit || Array(7).fill("Rest"),
+  },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 
-router.put("/:id/split", auth, async (req, res) => {
+router.patch("/:id/split", auth, async (req, res) => {
   try {
     if (req.user._id.toString() !== req.params.id) {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
+  return sendError(res, {
+    statusCode: 403,
+    message: "Unauthorized",
+  });
+}
 
     const { split } = req.body;
 
     if (!Array.isArray(split) || split.length !== 7) {
-      return res.status(400).json({
-        message: "Split must be an array of exactly 7 day labels",
-      });
-    }
+  return sendError(res, {
+    statusCode: 400,
+    message: "Split must be an array of exactly 7 day labels",
+  });
+}
 
     if (!split.every((day) => typeof day === "string" && day.length <= 20)) {
-      return res.status(400).json({
-        message: "Each day must be a string (max 20 chars)",
-      });
-    }
+  return sendError(res, {
+    statusCode: 400,
+    message: "Each day must be a string (max 20 chars)",
+  });
+}
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -416,12 +552,17 @@ router.put("/:id/split", auth, async (req, res) => {
       { new: true }
     ).select("workoutSplit");
 
-    res.json({
-      message: "Split updated",
-      split: user.workoutSplit,
-    });
+    return sendSuccess(res, {
+  message: "Split updated",
+  data: {
+    split: user.workoutSplit,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 
@@ -434,7 +575,12 @@ router.get("/:handle", auth, async (req, res) => {
   try {
     const user = await User.findOne({ handle: req.params.handle.toLowerCase() }).select("-password -email");
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     const workoutCount = await Workout.countDocuments({ user: user._id });
     const recentWorkouts = await Workout.find({ user: user._id, isPublic: true })
@@ -444,28 +590,33 @@ router.get("/:handle", auth, async (req, res) => {
 
     const isFollowing = user.followers.includes(req.user._id);
 
-    res.json({
-      id: user._id,
-      name: user.name,
-     handle: user.handle,
-      avatar: user.avatar,
-      bio: user.bio,
-      streakCount: user.streakCount,
-      isFollowing,
-      stats: {
-        workouts: workoutCount,
-        followers: user.followers.length,
-        following: user.following.length,
-      },
-      recentWorkouts: recentWorkouts.map((w) => ({
-        id: w._id,
-        title: w.title,
-        duration: w.duration ? `${w.duration}m` : null,
-        date: timeAgo(w.createdAt),
-      })),
-    });
+    return sendSuccess(res, {
+  data: {
+    id: user._id,
+    name: user.name,
+    handle: user.handle,
+    avatar: user.avatar,
+    bio: user.bio,
+    streakCount: user.streakCount,
+    isFollowing,
+    stats: {
+      workouts: workoutCount,
+      followers: user.followers.length,
+      following: user.following.length,
+    },
+    recentWorkouts: recentWorkouts.map((w) => ({
+      id: w._id,
+      title: w.title,
+      duration: w.duration ? `${w.duration}m` : null,
+      date: timeAgo(w.createdAt),
+    })),
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+   return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 
@@ -479,10 +630,19 @@ router.post("/:handle/follow", auth, async (req, res) => {
       target = await User.findById(search);
     }
 
-    if (!target) return res.status(404).json({ message: "User not found" });
-    if (target._id.equals(req.user._id)) {
-      return res.status(400).json({ message: "You cannot follow yourself" });
-    }
+   if (!target) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
+
+if (target._id.equals(req.user._id)) {
+  return sendError(res, {
+    statusCode: 400,
+    message: "You cannot follow yourself",
+  });
+}
 
     const currentUserId = req.user._id;
     const wasFollowing = target.followers.some((id) => id.equals(currentUserId));
@@ -520,12 +680,17 @@ router.post("/:handle/follow", auth, async (req, res) => {
 
     const followerCount = await User.findById(target._id).select("followers").then((u) => u.followers.length);
 
-    res.json({
-      following: !wasFollowing,
-      followerCount,
-    });
+    return sendSuccess(res, {
+  data: {
+    following: !wasFollowing,
+    followerCount,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+     return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 
@@ -533,10 +698,18 @@ router.post("/:handle/follow", auth, async (req, res) => {
 router.post("/:handle/follow-only", auth, async (req, res) => {
   try {
     const target = await User.findOne({ handle: req.params.handle.toLowerCase() });
-    if (!target) return res.status(404).json({ message: "User not found" });
+    if (!target) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
     if (target._id.equals(req.user._id)) {
-      return res.status(400).json({ message: "You cannot follow yourself" });
-    }
+  return sendError(res, {
+    statusCode: 400,
+    message: "You cannot follow yourself",
+  });
+}
 
     const alreadyFollowing = target.followers.includes(req.user._id);
 
@@ -555,12 +728,18 @@ router.post("/:handle/follow-only", auth, async (req, res) => {
       await Promise.all([target.save(), req.user.save()]);
     }
 
-    res.json({
-      following: true,
-      followerCount: target.followers.length,
-    });
+    return sendSuccess(res, {
+  data: {
+    following: true,
+    followerCount: target.followers.length,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+      return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
+
   }
 });
 
@@ -568,19 +747,29 @@ router.post("/:handle/follow-only", auth, async (req, res) => {
 router.post("/:handle/unfollow", auth, async (req, res) => {
   try {
     const target = await User.findOne({ handle: req.params.handle.toLowerCase() });
-    if (!target) return res.status(404).json({ message: "User not found" });
+    if (!target) {
+  return sendError(res, {
+    statusCode: 404,
+    message: "User not found",
+  });
+}
 
     target.followers.pull(req.user._id);
     req.user.following.pull(target._id);
 
     await Promise.all([target.save(), req.user.save()]);
 
-    res.json({
-      following: false,
-      followerCount: target.followers.length,
-    });
+    return sendSuccess(res, {
+  data: {
+    following: false,
+    followerCount: target.followers.length,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+     return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 
@@ -665,9 +854,16 @@ router.get("/", auth, async (req, res) => {
       };
     });
 
-    res.json({ users: shaped });
+    return sendSuccess(res, {
+  data: {
+    users: shaped,
+  },
+});
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    return sendError(res, {
+    statusCode: 500,
+    message: err.message,
+  });
   }
 });
 

@@ -33,7 +33,6 @@ export const getSavedPosts = (params = {}) => {
 
 export const getPost = (id) => api.get(`/posts/${id}`);
 export const createPost = (data) => api.post('/posts', data);
-//export const updatePost = (id, data) => api.put(`/posts/${id}`, data);
 export const updatePost = (id, data) => api.patch(`/posts/${id}`, data);
 export const deletePost = (id) => api.delete(`/posts/${id}`);
 export const respectPost = (postId, respected) =>
@@ -44,15 +43,15 @@ export const addComment = (postId, data) =>
 export const deleteComment = (postId, commentId) =>
   api.delete(`/posts/${postId}/comments/${commentId}`);
 export const updateComment = (postId, commentId, data) =>
-  api.put(`/posts/${postId}/comments/${commentId}`, data);
+  api.patch(`/posts/${postId}/comments/${commentId}`, data);
 export const reactToComment = (postId, commentId, emoji) =>
   api.post(`/posts/${postId}/comments/${commentId}/react`, { emoji });
 
 // ── User Profile APIs ──
 export const getUserProfile = (userId) => api.get(`/users/id/${userId}`);
-export const updateProfile = (data) => api.put('/users/profile', data);
+export const updateProfile = (data) => api.patch('/users/profile', data);
 export const uploadProfilePhoto = (formData) =>
-  api.put('/users/avatar', formData);
+  api.patch('/users/avatar', formData);
 export const deleteAccount = () => api.delete('/users/account');
 export const getUserPosts = (userId, params = {}) => {
   const query = new URLSearchParams(params).toString();
@@ -66,4 +65,4 @@ export const followUserById = (userId) => api.post(`/users/id/${userId}/follow`)
 export const getSuggestedUsers = () => api.get('/users/suggested');
 export const getUserSplit = (userId) => api.get(`/users/${userId}/split`);
 export const updateUserSplit = (userId, split) =>
-  api.put(`/users/${userId}/split`, { split });
+  api.patch(`/users/${userId}/split`, { split });

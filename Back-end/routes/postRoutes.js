@@ -37,12 +37,11 @@ router.get("/saved", getSavedPosts);
 router.post('/:postId/comments', addComment);
 router.get('/:postId/comments', getComments);
 router.delete('/:postId/comments/:commentId', deleteComment);
-router.put('/:postId/comments/:commentId', updateComment);
+router.patch('/:postId/comments/:commentId', updateComment);
 router.post('/:postId/comments/:commentId/react', reactToComment); 
 
 // ── Single Post ──
 router.get('/:postId', getPost);
-router.put('/:postId', updatePost);
 router.patch('/:postId', updatePost);
 router.delete('/:postId', deletePost);
 
