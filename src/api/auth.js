@@ -45,3 +45,7 @@ export const exchangeOAuthCode = (code) =>
   api.post("/auth/exchange", {
     code,
   });
+
+// ── Logout ────────────────────────────
+export const logout = () =>
+  api.post("/auth/logout");  

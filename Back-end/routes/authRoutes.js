@@ -17,6 +17,7 @@ import {
   generateRefreshToken,
 } from "../utils/generateToken.js";
 import { sendSuccess, sendError } from "../utils/apiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
 import auth from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -248,135 +249,125 @@ router.get('/facebook/callback',
 );
 
 // ========== EMAIL REGISTRATION ==========
+// ========== EMAIL REGISTRATION ==========
 router.post(
-  '/register/email',
+  "/register/email",
   registerLimiter,
-   validate(registerSchema),
-  async (req, res, next) => {
-    try {
-      const { name, email, password } = req.body;
+  validate(registerSchema),
+  asyncHandler(async (req, res) => {
+    const { name, email, password } = req.body;
 
-      const normalizedName = name?.trim();
-      const normalizedEmail = email?.trim().toLowerCase();
+    const normalizedName = name?.trim();
+    const normalizedEmail = email?.trim().toLowerCase();
 
-      // ── Validate required fields ──
-      if (!normalizedName || !normalizedEmail || !password) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Name, email, and password are required',
-        });
-      }
-
-      // ── Validate password ──
-      if (password.length < 8) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Password must be at least 8 characters',
-        });
-      }
-
-      // ── Check existing email ──
-      const existingUser = await User.findOne({
-        email: normalizedEmail,
+    // Validate required fields
+    if (!normalizedName || !normalizedEmail || !password) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Name, email, and password are required",
       });
+    }
 
-      if (existingUser) {
-        return sendError(res, {
-          statusCode: 409,
-          message: 'Email already registered',
-        });
-      }
-
-      // ── Generate base handle ──
-   const baseHandle = normalizedName
-  .toLowerCase()
-  .replace(/\s+/g, '')
-  .replace(/[^a-z0-9_]/g, '');
-
-if (!baseHandle) {
-  return sendError(res, {
-    statusCode: 400,
-    message: 'Please provide a valid name',
-  });
-}
-
-   let handle = baseHandle;
-let handleExists = await User.findOne({ handle });
-
-let attempts = 0;
-const maxAttempts = 10;
-
-while (handleExists && attempts < maxAttempts) {
-  const randomNumber = Math.floor(Math.random() * 9000) + 1000;
-
-  handle = `${baseHandle}${randomNumber}`;
-
-  handleExists = await User.findOne({ handle });
-
-  attempts++;
-}
-
-if (handleExists) {
-  return sendError(res, {
-    statusCode: 500,
-    message: 'Unable to generate a unique handle. Please try again.',
-  });
-}
-
-      // ── Create user ──
-      const user = await User.create({
-        name: normalizedName,
-        email: normalizedEmail,
-        password,
-        handle,
-        authProvider: 'local',
-        isVerified: false,
-        onboardingComplete: false,
+    // Validate password
+    if (password.length < 8) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Password must be at least 8 characters",
       });
+    }
 
+    // Check existing email
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
+
+    if (existingUser) {
+      return sendError(res, {
+        statusCode: 409,
+        message: "Email already registered",
+      });
+    }
+
+    // Generate base handle
+    const baseHandle = normalizedName
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[^a-z0-9_]/g, "");
+
+    if (!baseHandle) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Please provide a valid name",
+      });
+    }
+
+    // Generate a unique handle
+    let handle = baseHandle;
+    let handleExists = await User.findOne({ handle });
+
+    let attempts = 0;
+    const maxAttempts = 10;
+
+    while (handleExists && attempts < maxAttempts) {
+      const randomNumber = Math.floor(Math.random() * 9000) + 1000;
+
+      handle = `${baseHandle}${randomNumber}`;
+
+      handleExists = await User.findOne({ handle });
+
+      attempts++;
+    }
+
+    if (handleExists) {
+      return sendError(res, {
+        statusCode: 500,
+        message: "Unable to generate a unique handle. Please try again.",
+      });
+    }
+
+    // Create user
+    const user = await User.create({
+      name: normalizedName,
+      email: normalizedEmail,
+      password,
+      handle,
+      authProvider: "local",
+      isVerified: false,
+      onboardingComplete: false,
+    });
+
+    // Create access token
     const accessToken = generateAccessToken(user._id);
 
-await setRefreshTokenCookie(res, user);
+    // Set refresh token as HTTP-only cookie
+    await setRefreshTokenCookie(res, user);
 
-return sendSuccess(res, {
-  statusCode: 201,
-  message: "Account created successfully",
-  data: {
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      handle: user.handle,
-      avatar: user.avatar,
-      isVerified: user.isVerified,
-      onboardingComplete: user.onboardingComplete,
-      token: accessToken,
-    },
-  },
-});
-
-    } catch (err) {
-      // MongoDB duplicate key error
-      if (err.code === 11000) {
-        const field = Object.keys(err.keyPattern || {})[0];
-
-        return sendError(res, {
-          statusCode: 409,
-          message:
-            field === 'email'
-              ? 'Email already registered'
-              : 'Handle already exists. Please try again.',
-        });
-      }
-
-      return next(err);
-    }
-  }
+    // Send response
+    return sendSuccess(res, {
+      statusCode: 201,
+      message: "Account created successfully",
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          handle: user.handle,
+          avatar: user.avatar,
+          isVerified: user.isVerified,
+          onboardingComplete: user.onboardingComplete,
+          token: accessToken,
+        },
+      },
+    });
+  })
 );
 
 
-router.post("/login", loginLimiter, validate(loginSchema),  async (req, res, next) => {
-  try {
+router.post(
+  "/login",
+  loginLimiter,
+  validate(loginSchema),
+  asyncHandler(async (req, res) => {
     const { email, password } = req.body;
     const normalizedEmail = email?.trim().toLowerCase();
 
@@ -440,15 +431,13 @@ router.post("/login", loginLimiter, validate(loginSchema),  async (req, res, nex
         },
       },
     });
-  } catch (err) {
-    return next(err);
-  }
-});
-
-
+  })
+);
 // ========== GET CURRENT USER ==========
-router.get('/me', auth, async (req, res, next) => {
-  try {
+router.get(
+  "/me",
+  auth,
+  asyncHandler(async (req, res) => {
     const user = req.user;
 
     return sendSuccess(res, {
@@ -486,502 +475,508 @@ router.get('/me', auth, async (req, res, next) => {
         },
       },
     });
-  } catch (err) {
-    return next(err);
-  }
-});
+  })
+);
 
 
 // ========== FORGOT PASSWORD ==========
 router.post(
-  '/forgot-password',
+  "/forgot-password",
   forgotPasswordLimiter,
-  async (req, res, next) => {
-    try {
-      const { email } = req.body;
+  asyncHandler(async (req, res) => {
+    const { email } = req.body;
 
-      // Validate email
-      if (!email?.trim() || !email.includes('@')) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Please provide a valid email',
-        });
-      }
-
-      const normalizedEmail = email.trim().toLowerCase();
-
-      // Find user
-      const user = await User.findOne({
-        email: normalizedEmail,
+    // Validate email
+    if (!email?.trim() || !email.includes("@")) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Please provide a valid email",
       });
+    }
 
-      // Prevent email enumeration
-      if (!user) {
-        return sendSuccess(res, {
-          statusCode: 200,
-          message: 'If an account exists, a reset link has been sent',
-        });
-      }
+    const normalizedEmail = email.trim().toLowerCase();
 
-      // Generate secure reset token
-      const resetToken = crypto
-        .randomBytes(32)
-        .toString('hex');
+    // Find user
+    const user = await User.findOne({
+      email: normalizedEmail,
+    });
 
-      // Store only the hashed version in the database
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(resetToken)
-        .digest('hex');
+    // Prevent email enumeration
+    if (!user) {
+      return sendSuccess(res, {
+        statusCode: 200,
+        message: "If an account exists, a reset link has been sent",
+      });
+    }
 
-      user.resetPasswordToken = hashedToken;
-      user.resetPasswordExpires =
-        Date.now() + 30 * 60 * 1000;
+    // Generate secure reset token
+    const resetToken = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    // Store only the hashed version in the database
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires =
+      Date.now() + 30 * 60 * 1000;
+
+    await user.save({
+      validateBeforeSave: false,
+    });
+
+    // Create reset URL
+    const resetUrl =
+      `${CLIENT_URL}/reset-password?token=${resetToken}`;
+
+    // Email content
+    const message = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8b5cf6;">
+          Password Reset Request
+        </h2>
+
+        <p>Hello,</p>
+
+        <p>
+          You requested a password reset for your Zyft account.
+        </p>
+
+        <p>
+          Click the button below to reset your password.
+          This link expires in 30 minutes.
+        </p>
+
+        <a
+          href="${resetUrl}"
+          style="
+            display: inline-block;
+            background: linear-gradient(to right, #8b5cf6, #6366f1);
+            color: white;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 600;
+          "
+        >
+          Reset Password
+        </a>
+
+        <p>Or copy this link:</p>
+
+        <p style="word-break: break-all; color: #666;">
+          ${resetUrl}
+        </p>
+
+        <p
+          style="
+            color: #999;
+            font-size: 12px;
+            margin-top: 30px;
+          "
+        >
+          If you didn't request this, ignore this email.
+          Your password is safe.
+        </p>
+      </div>
+    `;
+
+    // Send reset email
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Zyft - Password Reset Request",
+        html: message,
+      });
+    } catch (emailError) {
+      console.error(
+        "Reset email send failed:",
+        emailError
+      );
+
+      // Remove the reset token because the email failed
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
 
       await user.save({
         validateBeforeSave: false,
       });
 
-      // Create reset URL
-      const resetUrl =
-        `${CLIENT_URL}/reset-password?token=${resetToken}`;
+      return sendError(res, {
+        statusCode: 500,
+        message:
+          "Failed to send email. Please try again later.",
+      });
+    }
 
-      // Email content
-      const message = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #8b5cf6;">
-            Password Reset Request
-          </h2>
+    // Development-only reset information
+    if (process.env.NODE_ENV !== "production") {
+      console.log("\n");
+      console.log(
+        "╔════════════════════════════════════════════════════════════╗"
+      );
+      console.log(
+        "║          🔐 PASSWORD RESET LINK (DEV MODE)                 ║"
+      );
+      console.log(
+        "╠════════════════════════════════════════════════════════════╣"
+      );
+      console.log(`  Email: ${normalizedEmail}`);
+      console.log(`  URL:   ${resetUrl}`);
+      console.log(
+        "╚════════════════════════════════════════════════════════════╝"
+      );
+      console.log("\n");
 
-          <p>Hello,</p>
-
-          <p>
-            You requested a password reset for your Zyft account.
-          </p>
-
-          <p>
-            Click the button below to reset your password.
-            This link expires in 30 minutes.
-          </p>
-
-          <a
-            href="${resetUrl}"
-            style="
-              display: inline-block;
-              background: linear-gradient(to right, #8b5cf6, #6366f1);
-              color: white;
-              padding: 14px 28px;
-              text-decoration: none;
-              border-radius: 12px;
-              margin: 20px 0;
-              font-weight: 600;
-            "
-          >
-            Reset Password
-          </a>
-
-          <p>Or copy this link:</p>
-
-          <p style="word-break: break-all; color: #666;">
-            ${resetUrl}
-          </p>
-
-          <p
-            style="
-              color: #999;
-              font-size: 12px;
-              margin-top: 30px;
-            "
-          >
-            If you didn't request this, ignore this email.
-            Your password is safe.
-          </p>
-        </div>
-      `;
-
-      // Send reset email
-      try {
-        await sendEmail({
-          to: user.email,
-          subject: 'Zyft - Password Reset Request',
-          html: message,
-        });
-
-      } catch (emailError) {
-        console.error(
-          'Reset email send failed:',
-          emailError
-        );
-
-        // Remove the reset token because the email failed
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
-
-        await user.save({
-          validateBeforeSave: false,
-        });
-
-        return sendError(res, {
-          statusCode: 500,
-          message:
-            'Failed to send email. Please try again later.',
-        });
-      }
-
-      // Development-only reset information
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('\n');
-        console.log(
-          '╔════════════════════════════════════════════════════════════╗'
-        );
-        console.log(
-          '║          🔐 PASSWORD RESET LINK (DEV MODE)                 ║'
-        );
-        console.log(
-          '╠════════════════════════════════════════════════════════════╣'
-        );
-        console.log(`  Email: ${normalizedEmail}`);
-        console.log(`  URL:   ${resetUrl}`);
-        console.log(
-          '╚════════════════════════════════════════════════════════════╝'
-        );
-        console.log('\n');
-
-        return sendSuccess(res, {
-          statusCode: 200,
-          message: 'Reset link sent to your email',
-          data: {
-            devToken: resetToken,
-            devUrl: resetUrl,
-          },
-        });
-      }
-
-      // Production success response
       return sendSuccess(res, {
         statusCode: 200,
-        message: 'Reset link sent to your email',
+        message: "Reset link sent to your email",
+        data: {
+          devToken: resetToken,
+          devUrl: resetUrl,
+        },
       });
-
-    } catch (err) {
-      return next(err);
     }
-  }
-);
 
+    // Production success response
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: "Reset link sent to your email",
+    });
+  })
+);
 
 // ========== RESET PASSWORD ==========
 router.post(
-  '/reset-password',
+  "/reset-password",
   resetPasswordLimiter,
-  async (req, res, next) => {
-    try {
-      const { token: resetToken, newPassword } = req.body;
+  asyncHandler(async (req, res) => {
+    const { token: resetToken, newPassword } = req.body;
 
-      // Validate required fields
-      if (!resetToken || !newPassword) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Token and new password are required',
-        });
-      }
-
-      // Validate password length
-      if (newPassword.length < 8) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Password must be at least 8 characters',
-        });
-      }
-
-      // Hash the token so it can be compared with the hashed
-      // version stored in the database
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(resetToken)
-        .digest('hex');
-
-      // Find a user with a valid, non-expired reset token
-      const user = await User.findOne({
-        resetPasswordToken: hashedToken,
-        resetPasswordExpires: {
-          $gt: Date.now(),
-        },
+    // Validate required fields
+    if (!resetToken || !newPassword) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Token and new password are required",
       });
-
-      if (!user) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Invalid or expired reset token',
-        });
-      }
-
-      // Update password
-      user.password = newPassword;
-
-      // Remove reset token so it cannot be reused
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
-
-      await user.save();
-
-const accessToken = generateAccessToken(user._id);
-
-await setRefreshTokenCookie(res, user);
-
-return sendSuccess(res, {
-  statusCode: 200,
-  message: "Password reset successful",
-  data: {
-    token: accessToken,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-    },
-  },
-});
-
-    } catch (err) {
-      return next(err);
     }
-  }
+
+    // Validate password length
+    if (newPassword.length < 8) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Password must be at least 8 characters",
+      });
+    }
+
+    // Hash the token so it can be compared with the hashed
+    // version stored in the database
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
+    // Find a user with a valid, non-expired reset token
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: {
+        $gt: Date.now(),
+      },
+    });
+
+    if (!user) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Invalid or expired reset token",
+      });
+    }
+
+    // Update password
+    user.password = newPassword;
+
+    // Remove reset token so it cannot be reused
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    await user.save();
+
+    const accessToken = generateAccessToken(user._id);
+
+    await setRefreshTokenCookie(res, user);
+
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: "Password reset successful",
+      data: {
+        token: accessToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+        },
+      },
+    });
+  })
 );
 // ========== EMAIL VERIFICATION ==========
 
 // ========== SEND EMAIL VERIFICATION ==========
 router.post(
-  '/verify-email',
+  "/verify-email",
   verifySendLimiter,
   auth,
-  async (req, res, next) => {
+  asyncHandler(async (req, res) => {
+    const user = req.user;
+
+    // User is already verified
+    if (user.isVerified) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Email already verified",
+      });
+    }
+
+    // Generate secure verification token
+    const verifyToken = crypto
+      .randomBytes(32)
+      .toString("hex");
+
+    // Store only the hashed token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(verifyToken)
+      .digest("hex");
+
+    user.emailVerifyToken = hashedToken;
+    user.emailVerifyExpires =
+      Date.now() + 30 * 60 * 1000;
+
+    await user.save({
+      validateBeforeSave: false,
+    });
+
+    // Create verification URL
+    const verifyUrl =
+      `${CLIENT_URL}/verify-email/confirm?token=${verifyToken}`;
+
+    const message = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #8b5cf6;">
+          Verify Your Email
+        </h2>
+
+        <p>Hello ${user.name},</p>
+
+        <p>
+          Click the button below to verify your Zyft account.
+          This link expires in 30 minutes.
+        </p>
+
+        <a
+          href="${verifyUrl}"
+          style="
+            display: inline-block;
+            background: linear-gradient(to right, #8b5cf6, #6366f1);
+            color: white;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 12px;
+            margin: 20px 0;
+            font-weight: 600;
+          "
+        >
+          Verify Email
+        </a>
+
+        <p>Or copy this link:</p>
+
+        <p style="word-break: break-all; color: #666;">
+          ${verifyUrl}
+        </p>
+
+        <p
+          style="
+            color: #999;
+            font-size: 12px;
+            margin-top: 30px;
+          "
+        >
+          If you didn't request this, you can safely ignore this email.
+        </p>
+      </div>
+    `;
+
+    // Send verification email
     try {
-      const user = req.user;
+      await sendEmail({
+        to: user.email,
+        subject: "Zyft - Verify Your Email",
+        html: message,
+      });
+    } catch (emailError) {
+      console.error(
+        "Verification email send failed:",
+        emailError
+      );
 
-      // User is already verified
-      if (user.isVerified) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Email already verified',
-        });
-      }
-
-      // Generate secure verification token
-      const verifyToken = crypto
-        .randomBytes(32)
-        .toString('hex');
-
-      // Store only the hashed token
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(verifyToken)
-        .digest('hex');
-
-      user.emailVerifyToken = hashedToken;
-      user.emailVerifyExpires =
-        Date.now() + 30 * 60 * 1000;
+      // Remove token if email sending fails
+      user.emailVerifyToken = undefined;
+      user.emailVerifyExpires = undefined;
 
       await user.save({
         validateBeforeSave: false,
       });
 
-      // Create verification URL
-      const verifyUrl =
-        `${CLIENT_URL}/verify-email/confirm?token=${verifyToken}`;
-
-      const message = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <h2 style="color: #8b5cf6;">
-            Verify Your Email
-          </h2>
-
-          <p>Hello ${user.name},</p>
-
-          <p>
-            Click the button below to verify your Zyft account.
-            This link expires in 30 minutes.
-          </p>
-
-          <a
-            href="${verifyUrl}"
-            style="
-              display: inline-block;
-              background: linear-gradient(to right, #8b5cf6, #6366f1);
-              color: white;
-              padding: 14px 28px;
-              text-decoration: none;
-              border-radius: 12px;
-              margin: 20px 0;
-              font-weight: 600;
-            "
-          >
-            Verify Email
-          </a>
-
-          <p>Or copy this link:</p>
-
-          <p style="word-break: break-all; color: #666;">
-            ${verifyUrl}
-          </p>
-
-          <p
-            style="
-              color: #999;
-              font-size: 12px;
-              margin-top: 30px;
-            "
-          >
-            If you didn't request this, you can safely ignore this email.
-          </p>
-        </div>
-      `;
-
-      try {
-        await sendEmail({
-          to: user.email,
-          subject: 'Zyft - Verify Your Email',
-          html: message,
-        });
-      } catch (emailError) {
-        console.error(
-          'Verification email send failed:',
-          emailError
-        );
-
-        // Remove token if email sending fails
-        user.emailVerifyToken = undefined;
-        user.emailVerifyExpires = undefined;
-
-        await user.save({
-          validateBeforeSave: false,
-        });
-
-        return sendError(res, {
-          statusCode: 500,
-          message:
-            'Failed to send verification email. Please try again later.',
-        });
-      }
-
-      return sendSuccess(res, {
-        statusCode: 200,
-        message: 'Verification link sent',
+      return sendError(res, {
+        statusCode: 500,
+        message:
+          "Failed to send verification email. Please try again later.",
       });
-
-    } catch (err) {
-      return next(err);
     }
-  }
+
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: "Verification link sent",
+    });
+  })
 );
 
 // ========== CONFIRM EMAIL VERIFICATION ==========
 router.post(
-  '/verify-email/confirm',
+  "/verify-email/confirm",
   verifyConfirmLimiter,
-  async (req, res, next) => {
-    try {
-      const { token: verifyToken } = req.body;
+  asyncHandler(async (req, res) => {
+    const { token: verifyToken } = req.body;
 
-      if (!verifyToken) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Verification token is required',
-        });
-      }
-
-      // Hash the received token
-      const hashedToken = crypto
-        .createHash('sha256')
-        .update(verifyToken)
-        .digest('hex');
-
-      // Find user with a valid, non-expired verification token
-      const user = await User.findOne({
-        emailVerifyToken: hashedToken,
-        emailVerifyExpires: {
-          $gt: Date.now(),
-        },
+    if (!verifyToken) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Verification token is required",
       });
-
-      if (!user) {
-        return sendError(res, {
-          statusCode: 400,
-          message: 'Invalid or expired verification link',
-        });
-      }
-
-      // Verify the user
-      user.isVerified = true;
-
-      // Remove verification token so it cannot be reused
-      user.emailVerifyToken = undefined;
-      user.emailVerifyExpires = undefined;
-
-      await user.save();
-
-      return sendSuccess(res, {
-        statusCode: 200,
-        message: 'Email verified successfully',
-      });
-
-    } catch (err) {
-      return next(err);
     }
-  }
+
+    // Hash the received token
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(verifyToken)
+      .digest("hex");
+
+    // Find user with a valid, non-expired verification token
+    const user = await User.findOne({
+      emailVerifyToken: hashedToken,
+      emailVerifyExpires: {
+        $gt: Date.now(),
+      },
+    });
+
+    if (!user) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Invalid or expired verification link",
+      });
+    }
+
+    // Verify the user
+    user.isVerified = true;
+
+    // Remove verification token so it cannot be reused
+    user.emailVerifyToken = undefined;
+    user.emailVerifyExpires = undefined;
+
+    await user.save();
+
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: "Email verified successfully",
+    });
+  })
 );
 
 // ========== REFRESH ACCESS TOKEN ==========
-router.post("/refresh", async (req, res, next) => {
-  try {
+router.post(
+  "/refresh",
+  asyncHandler(async (req, res) => {
     const refreshToken = getRefreshTokenFromCookie(req);
 
+    // Refresh token is required
     if (!refreshToken) {
-      return sendError(res, { statusCode: 401, message: "Refresh token is required" });
+      return sendError(res, {
+        statusCode: 401,
+        message: "Refresh token is required",
+      });
     }
 
     let decoded;
+
+    // Verify refresh token
     try {
-      decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+      );
     } catch (error) {
-      return sendError(res, { statusCode: 401, message: "Invalid or expired refresh token" });
+      return sendError(res, {
+        statusCode: 401,
+        message: "Invalid or expired refresh token",
+      });
     }
 
-    // Confirm your User schema actually has `select: false` on this field —
-    // if it doesn't, .select("+refreshToken") is harmless but unnecessary.
-    const user = await User.findById(decoded.userId).select("+refreshToken");
+    // Find user and include the stored refresh token hash
+    const user = await User.findById(decoded.userId).select(
+      "+refreshToken"
+    );
 
     if (!user || !user.refreshToken) {
-      return sendError(res, { statusCode: 401, message: "Invalid refresh token" });
+      return sendError(res, {
+        statusCode: 401,
+        message: "Invalid refresh token",
+      });
     }
 
+    // Compare the supplied refresh token with
+    // the hashed token stored in the database
     const hashedToken = hashToken(refreshToken);
 
     if (hashedToken !== user.refreshToken) {
-      // Mismatch = stale or stolen token. Kill the stored session rather
-      // than silently rejecting and leaving it valid for next time.
+      // Token mismatch means the session is no longer valid.
+      // Invalidate the stored refresh token as a precaution.
       user.refreshToken = undefined;
-      await user.save({ validateBeforeSave: false });
+
+      await user.save({
+        validateBeforeSave: false,
+      });
+
       clearRefreshTokenCookie(res);
-      return sendError(res, { statusCode: 401, message: "Session invalidated, please log in again" });
+
+      return sendError(res, {
+        statusCode: 401,
+        message: "Session invalidated, please log in again",
+      });
     }
 
-    // Rotate: setRefreshTokenCookie generates a NEW refresh token, hashes
-    // it, stores it on `user`, and sets the cookie — this replaces the old
-    // manual re-implementation that was passing a string where a user
-    // document was expected and crashing on the second refresh call.
+    // Generate a new short-lived access token
     const accessToken = generateAccessToken(user._id);
+
+    // Rotate the refresh token:
+    // - generate a new refresh token
+    // - hash/store it
+    // - send the new raw token as the HTTP-only cookie
     await setRefreshTokenCookie(res, user);
 
     return sendSuccess(res, {
       statusCode: 200,
       message: "Access token refreshed",
-      data: { token: accessToken },
+      data: {
+        token: accessToken,
+      },
     });
-  } catch (error) {
-    next(error);
-  }
-});
+  })
+);
 
 // ========== LOGOUT ==========
 router.post("/logout", async (req, res) => {
