@@ -16,6 +16,7 @@ import {
   Bookmark,
   EyeOff,
   Share2,
+  Repeat2,
   Flag,
   X,
   AlertTriangle,
@@ -24,9 +25,6 @@ import {
 } from "lucide-react";
 
 import {
-  updatePost,
-  deletePost,
-  respectPost,
   getComments,
   addComment,
   deleteComment,
@@ -425,6 +423,7 @@ export default function FeedPostCard({
   onUpdate,
   onDelete,
   onRespect,
+  onRepost,
   autoOpenComments = false,
   focusCommentId = null,
   autoFocusReply = false,
@@ -439,6 +438,8 @@ export default function FeedPostCard({
   const [editText, setEditText] = useState(post.content || "");
   const [isSaving, setIsSaving] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [reposting, setReposting] = useState(false);
+  const [repostCount, setRepostCount] = useState(post.repostCount ?? 0);
   const [saved, setSaved] = useState(post.isSaved || false);
   const [savingFavorite, setSavingFavorite] = useState(false);
   const [hidden, setHidden] = useState(post.isHidden || false);
@@ -472,10 +473,6 @@ export default function FeedPostCard({
   // Respect state
   // ───────────────────────────────────────────────────────────
 
-  const [didRespect, setDidRespect] = useState(post.didRespect || false);
-
-  const [respectCount, setRespectCount] = useState(post.respectCount || 0);
-
   const [respecting, setRespecting] = useState(false);
 
   // ───────────────────────────────────────────────────────────
@@ -504,21 +501,45 @@ export default function FeedPostCard({
 
   const user = post.user || {};
 
+  const isRepost = post.isRepost === true;
+
+  const originalPost =
+    isRepost && post.originalPost && typeof post.originalPost === "object"
+      ? post.originalPost
+      : null;
+
+  const originalAuthor =
+    originalPost?.user && typeof originalPost.user === "object"
+      ? originalPost.user
+      : null;
+
+  // Respect data belongs to the original post when displaying a repost.
+  const respectTargetPost = originalPost || post;
+
+  const didRespect = Boolean(respectTargetPost.didRespect);
+  const respectCount = respectTargetPost.respectCount ?? 0;
+
+  // Show the original author for reposts.
+  const displayUser = originalAuthor || user;
+
+  // Use the original post's date when available.
+  const displayPost = originalPost || post;
+
   const workout = post.workout || {};
 
-  const isOwner = currentUserId && user._id === currentUserId;
+  const isOwner = currentUserId?.toString() === user._id?.toString();
 
-  const timeAgo = post.createdAt
-    ? new Date(post.createdAt).toLocaleDateString("en-US", {
+  const timeAgo = displayPost.createdAt
+    ? new Date(displayPost.createdAt).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
       })
     : t("feedpost:post.recently");
 
   const userHandle =
-    user.handle ||
-    user.username ||
-    user.name?.toLowerCase().replace(/\s+/g, "") ||
+    displayUser.handle ||
+    displayUser.username ||
+    displayUser.name?.toLowerCase().replace(/\s+/g, "") ||
     "user";
 
   // ───────────────────────────────────────────────────────────
@@ -596,17 +617,6 @@ export default function FeedPostCard({
       count: days,
     });
   })();
-
-  // ───────────────────────────────────────────────────────────
-  // Sync respect state
-  // ───────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    setDidRespect(post.didRespect || false);
-
-    setRespectCount(post.respectCount || 0);
-  }, [post.didRespect, post.respectCount]);
-
   // ───────────────────────────────────────────────────────────
   // Menu click-outside
   // ───────────────────────────────────────────────────────────
@@ -644,6 +654,14 @@ export default function FeedPostCard({
       document.removeEventListener("click", close);
     };
   }, [openPickerId]);
+
+  // ───────────────────────────────────────────────────────────
+  // Repost count sync
+  // ───────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    setRepostCount(post.repostCount ?? 0);
+  }, [post.repostCount]);
 
   // ───────────────────────────────────────────────────────────
   // Load comments
@@ -738,10 +756,14 @@ export default function FeedPostCard({
   const handleRespect = async () => {
     if (respecting) return;
 
+    const targetPost = originalPost || post;
+
+    if (!targetPost?._id || !onRespect) return;
+
     setRespecting(true);
 
     try {
-      await onRespect(post._id, post.didRespect, post.respectCount);
+      await onRespect(targetPost._id);
     } catch (err) {
       showToast(t("feedpost:toast.respectUpdateFailed"), "error");
 
@@ -822,6 +844,27 @@ export default function FeedPostCard({
   };
 
   // ───────────────────────────────────────────────────────────
+  // REPOST: backend toggles repost on the ORIGINAL post ID.
+  const handleRepost = async () => {
+    if (reposting || post.isRepost || post.visibility === "private") return;
+    setReposting(true);
+    try {
+      const reposted = await onRepost(post._id);
+      showToast(
+        reposted ? "Reposted successfully" : "Repost removed",
+        "success",
+      );
+    } catch (err) {
+      console.error("Repost failed:", err);
+      showToast(
+        err.response?.data?.message || "Could not update repost",
+        "error",
+      );
+    } finally {
+      setReposting(false);
+    }
+  };
+
   // SHARE
   // ───────────────────────────────────────────────────────────
 
@@ -1243,16 +1286,28 @@ export default function FeedPostCard({
             USER HEADER
         ═════════════════════════════════════════════════════ */}
 
+        {isRepost && (
+          <div className="flex items-center gap-1.5 px-4 pt-3 text-xs text-purple-400">
+            <Repeat2 size={13} />
+            <span>{user.name || "Someone"} reposted</span>
+          </div>
+        )}
+
         <div className="p-4 flex items-center justify-between">
           <Link
-            to={`/profile/${user._id}`}
+            to={`/profile/${displayUser._id}`}
             className="flex items-center gap-3 flex-1 min-w-0"
           >
-            <UserAvatar user={user} size={10} t={t} online={isOnline} />
+            <UserAvatar
+              user={displayUser}
+              size={10}
+              t={t}
+              online={isRepost ? false : isOnline}
+            />
 
             <div className="min-w-0">
               <h3 className="text-sm font-semibold truncate">
-                {user.name || t("feedpost:post.anonymous")}
+                {displayUser.name || t("feedpost:post.anonymous")}
               </h3>
 
               <p className="text-xs text-gray-500 truncate">
@@ -1604,17 +1659,14 @@ export default function FeedPostCard({
             onClick={handleRespect}
             disabled={respecting}
             className={`flex items-center gap-1.5 text-xs transition-all active:scale-95 disabled:opacity-50 ${
-              post.didRespect
-                ? "text-pink-500"
-                : "text-gray-500 hover:text-gray-300"
+              didRespect ? "text-pink-500" : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            <Heart size={14} fill={post.didRespect ? "currentColor" : "none"} />
+            <Heart size={14} fill={didRespect ? "currentColor" : "none"} />
 
-            {post.respectCount > 0 && (
+            {respectCount > 0 && (
               <>
-                <span className="font-semibold">{post.respectCount}</span>
-
+                <span className="font-semibold">{respectCount}</span>
                 <span>{t("feedpost:post.respects")}</span>
               </>
             )}
@@ -1641,6 +1693,27 @@ export default function FeedPostCard({
               </>
             )}
           </button>
+
+          {!post.isRepost && post.visibility !== "private" && (
+            <button
+              type="button"
+              onClick={handleRepost}
+              disabled={reposting || !onRepost}
+              className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-teal-400 disabled:opacity-50"
+            >
+              {reposting ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Repeat2 size={14} />
+              )}
+
+              {repostCount > 0 && (
+                <span className="font-semibold">{repostCount}</span>
+              )}
+
+              <span>Repost</span>
+            </button>
+          )}
         </div>
 
         {/* ═════════════════════════════════════════════════════

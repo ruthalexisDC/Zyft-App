@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { objectIdSchema } from "./commonValidators.js";
 
 export const updateProfileSchema = z.object({
   body: z.object({
@@ -79,5 +80,42 @@ export const updateNotificationPreferencesSchema = z.object({
   }),
 
   params: z.object({}),
+  query: z.object({}),
+});
+
+export const userIdParamSchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    id: objectIdSchema,
+  }),
+  query: z.object({}),
+});
+
+export const userHandleParamSchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    handle: z
+      .string()
+      .trim()
+      .min(1, "Handle is required")
+      .max(30, "Handle cannot exceed 30 characters"),
+  }),
+  query: z.object({}),
+});
+export const updateWorkoutSplitSchema = z.object({
+  body: z.object({
+    split: z
+      .array(
+        z
+          .string()
+          .max(20, "Each day must be a string (max 20 characters)")
+      )
+      .length(7, "Split must be an array of exactly 7 day labels"),
+  }),
+
+  params: z.object({
+    id: objectIdSchema,
+  }),
+
   query: z.object({}),
 });

@@ -11,6 +11,10 @@ import {
   registerSchema,
   loginSchema,
   exchangeSchema,
+   forgotPasswordSchema,
+  resetPasswordSchema,
+  verifyEmailSchema,
+  sendVerifyEmailSchema,
 } from "../validators/authValidators.js";
 import {
   generateAccessToken,
@@ -189,36 +193,32 @@ const authSuccess = async (req, res) => {
 // Exchange a one-time OAuth code for the real JWT. Called immediately by
 // the frontend after redirect — the code is deleted on first read whether
 // or not it was expired, so it can never be replayed.
-router.post('/exchange',  validate(exchangeSchema), (req, res) => {
-  const { code } = req.body;
+router.post(
+  "/exchange",
+  validate(exchangeSchema),
+  (req, res) => {
+    const { code } = req.body;
 
-  if (!code) {
-    return sendError(res, {
-      statusCode: 400,
-      message: 'Code is required',
+    const entry = oauthExchangeCodes.get(code);
+
+    oauthExchangeCodes.delete(code);
+
+    if (!entry || entry.expires < Date.now()) {
+      return sendError(res, {
+        statusCode: 400,
+        message: "Invalid or expired code",
+      });
+    }
+
+    return sendSuccess(res, {
+      statusCode: 200,
+      message: "OAuth authentication successful",
+      data: {
+        token: entry.token,
+      },
     });
   }
-
-  const entry = oauthExchangeCodes.get(code);
-
-  // Single-use: delete immediately
-  oauthExchangeCodes.delete(code);
-
-  if (!entry || entry.expires < Date.now()) {
-    return sendError(res, {
-      statusCode: 400,
-      message: 'Invalid or expired code',
-    });
-  }
-
-  return sendSuccess(res, {
-    statusCode: 200,
-    message: 'OAuth authentication successful',
-    data: {
-      token: entry.token,
-    },
-  });
-});
+);
 
 // ========== GOOGLE OAUTH ==========
 router.get('/google', passport.authenticate('google', { 
@@ -257,28 +257,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { name, email, password } = req.body;
 
-    const normalizedName = name?.trim();
-    const normalizedEmail = email?.trim().toLowerCase();
-
-    // Validate required fields
-    if (!normalizedName || !normalizedEmail || !password) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Name, email, and password are required",
-      });
-    }
-
-    // Validate password
-    if (password.length < 8) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Password must be at least 8 characters",
-      });
-    }
-
     // Check existing email
     const existingUser = await User.findOne({
-      email: normalizedEmail,
+      email,
     });
 
     if (existingUser) {
@@ -289,7 +270,7 @@ router.post(
     }
 
     // Generate base handle
-    const baseHandle = normalizedName
+    const baseHandle = name
       .toLowerCase()
       .replace(/\s+/g, "")
       .replace(/[^a-z0-9_]/g, "");
@@ -327,8 +308,8 @@ router.post(
 
     // Create user
     const user = await User.create({
-      name: normalizedName,
-      email: normalizedEmail,
+      name,
+      email,
       password,
       handle,
       authProvider: "local",
@@ -369,17 +350,9 @@ router.post(
   validate(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.body;
-    const normalizedEmail = email?.trim().toLowerCase();
-
-    if (!normalizedEmail || !password) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Email and password are required",
-      });
-    }
 
     const user = await User.findOne({
-      email: normalizedEmail,
+      email,
     }).select("+password");
 
     if (!user) {
@@ -426,6 +399,8 @@ router.post(
           email: user.email,
           handle: user.handle,
           avatar: user.avatar,
+          isVerified: user.isVerified,
+          authProvider: user.authProvider,
           onboardingComplete: user.onboardingComplete,
           token: accessToken,
         },
@@ -433,6 +408,7 @@ router.post(
     });
   })
 );
+
 // ========== GET CURRENT USER ==========
 router.get(
   "/me",
@@ -483,22 +459,13 @@ router.get(
 router.post(
   "/forgot-password",
   forgotPasswordLimiter,
+  validate(forgotPasswordSchema),
   asyncHandler(async (req, res) => {
     const { email } = req.body;
 
-    // Validate email
-    if (!email?.trim() || !email.includes("@")) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Please provide a valid email",
-      });
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-
     // Find user
     const user = await User.findOne({
-      email: normalizedEmail,
+      email,
     });
 
     // Prevent email enumeration
@@ -613,8 +580,10 @@ router.post(
       });
     }
 
-    // Development-only reset information
-    if (process.env.NODE_ENV !== "production") {
+    // Development-only reset information. Opt-IN to "development" rather than
+    // "anything that isn't production": if NODE_ENV is ever unset/misspelled on
+    // the host, this must NOT return a live reset token to the caller.
+    if (process.env.NODE_ENV === "development") {
       console.log("\n");
       console.log(
         "╔════════════════════════════════════════════════════════════╗"
@@ -625,7 +594,7 @@ router.post(
       console.log(
         "╠════════════════════════════════════════════════════════════╣"
       );
-      console.log(`  Email: ${normalizedEmail}`);
+      console.log(`  Email: ${email}`);
       console.log(`  URL:   ${resetUrl}`);
       console.log(
         "╚════════════════════════════════════════════════════════════╝"
@@ -654,33 +623,15 @@ router.post(
 router.post(
   "/reset-password",
   resetPasswordLimiter,
+  validate(resetPasswordSchema),
   asyncHandler(async (req, res) => {
     const { token: resetToken, newPassword } = req.body;
 
-    // Validate required fields
-    if (!resetToken || !newPassword) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Token and new password are required",
-      });
-    }
-
-    // Validate password length
-    if (newPassword.length < 8) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Password must be at least 8 characters",
-      });
-    }
-
-    // Hash the token so it can be compared with the hashed
-    // version stored in the database
     const hashedToken = crypto
       .createHash("sha256")
       .update(resetToken)
       .digest("hex");
 
-    // Find a user with a valid, non-expired reset token
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpires: {
@@ -695,10 +646,7 @@ router.post(
       });
     }
 
-    // Update password
     user.password = newPassword;
-
-    // Remove reset token so it cannot be reused
     user.resetPasswordToken = undefined;
     user.resetPasswordExpires = undefined;
 
@@ -723,6 +671,7 @@ router.post(
     });
   })
 );
+
 // ========== EMAIL VERIFICATION ==========
 
 // ========== SEND EMAIL VERIFICATION ==========
@@ -730,6 +679,7 @@ router.post(
   "/verify-email",
   verifySendLimiter,
   auth,
+  validate(sendVerifyEmailSchema),
   asyncHandler(async (req, res) => {
     const user = req.user;
 
@@ -850,15 +800,10 @@ router.post(
 router.post(
   "/verify-email/confirm",
   verifyConfirmLimiter,
+  validate(verifyEmailSchema),
   asyncHandler(async (req, res) => {
     const { token: verifyToken } = req.body;
 
-    if (!verifyToken) {
-      return sendError(res, {
-        statusCode: 400,
-        message: "Verification token is required",
-      });
-    }
 
     // Hash the received token
     const hashedToken = crypto
@@ -981,15 +926,42 @@ router.post(
 // ========== LOGOUT ==========
 router.post("/logout", async (req, res) => {
   try {
+    // Access tokens only live 15 minutes, so by the time someone clicks
+    // "log out" the Bearer token is often already expired — and revoking
+    // based on it silently did nothing, leaving the 30-day refresh token
+    // valid server-side. The refresh cookie (path-scoped to /api/v1/auth, so
+    // it IS sent here) is the reliable identifier; revoke only if it still
+    // matches what we have stored, so a stale cookie can't kill a newer session.
+    const refreshToken = getRefreshTokenFromCookie(req);
+    let revoked = false;
+
+    if (refreshToken) {
+      try {
+        const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+        const result = await User.updateOne(
+          { _id: decoded.userId, refreshToken: hashToken(refreshToken) },
+          { $unset: { refreshToken: 1 } }
+        );
+        revoked = result.modifiedCount > 0;
+      } catch {
+        // Expired/invalid refresh token — nothing valid left to revoke.
+      }
+    }
+
+    // Fallback for clients that have a valid access token but no cookie.
     const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith("Bearer ")) {
-      const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
-      await User.findByIdAndUpdate(decoded.userId, { $unset: { refreshToken: 1 } });
+    if (!revoked && authHeader?.startsWith("Bearer ")) {
+      try {
+        const decoded = jwt.verify(authHeader.split(" ")[1], process.env.JWT_SECRET);
+        await User.findByIdAndUpdate(decoded.userId, { $unset: { refreshToken: 1 } });
+      } catch {
+        // Expired/invalid access token — fine, we still clear the cookie below.
+      }
     }
   } catch (err) {
-    // Expired/invalid access token shouldn't block logout — clear the
-    // cookie regardless, the client is trying to end its session either way.
+    console.error("Logout cleanup failed:", err);
   }
+  // Always clear the cookie: the client is ending its session either way.
   clearRefreshTokenCookie(res); // local version, defined near the top of this file
   return sendSuccess(res, { statusCode: 200, message: "Logged out" });
 });

@@ -1,145 +1,354 @@
+
+import mongoose from "mongoose";
 import Post from "../models/Post.js";
 import User from "../models/User.js";
 import Comment from "../models/Comments.js";
-import { buildCommentTree } from "../utils/commentUtils.js";
-import Notification from "../models/Notification.js";
 import Report from "../models/Report.js";
+import { normalizeWorkout } from "../utils/workoutUtils.js";
+import { buildCommentTree } from "../utils/commentUtils.js";
+import { createNotificationService } from "./notificationService.js";
 import {
   BadRequestError,
+  ConflictError,
   ForbiddenError,
   NotFoundError,
 } from "../errors/ApiError.js";
 
+// ============================================================
+// SHARED HELPERS
+// ============================================================
 
-
-//Service : Create Post
-export const createPostService = async ({
-  userId,
-  content,
-  workout,
-  media,
-  visibility,
-}) => {
-
-
-  const post = await Post.create({
-    user: userId,
-    content,
-    workout,
-    media,
-    visibility,
-  });
-
-
-  await post.populate({
-    path: "user",
-    select: "name handle avatar",
-  });
-
-  return post;
+const idString = (id) => {
+  if (!id) return null;
+  return id.toString();
 };
 
-// Service: Get Feed
-export const getFeedService = async ({
-  userId,
-  pageNumber,
-  limitNumber,
-  type,
-  canViewPostWithOriginal,
+const includesId = (array = [], id) =>
+  array.some((item) => idString(item) === idString(id));
+
+const REPORT_SNAPSHOT_RETENTION_DAYS = 180;
+
+const buildWorkoutSnapshot = (workout) => {
+  if (!workout || typeof workout !== "object") {
+    return undefined;
+  }
+
+  const snapshot = {};
+
+  // Explicitly allow only non-media workout fields.
+  for (const field of [
+    "title",
+    "category",
+    "duration",
+    "caloriesBurned",
+  ]) {
+    if (workout[field] !== undefined) {
+      snapshot[field] = workout[field];
+    }
+  }
+
+  if (Array.isArray(workout.exercises)) {
+    snapshot.exercises = workout.exercises.map(
+      (exercise) => ({
+        ...(exercise.name !== undefined && {
+          name: exercise.name,
+        }),
+        ...(exercise.muscleGroup !== undefined && {
+          muscleGroup: exercise.muscleGroup,
+        }),
+        sets: Array.isArray(exercise.sets)
+          ? exercise.sets.map((set) => ({
+              ...(set.reps !== undefined && {
+                reps: set.reps,
+              }),
+              ...(set.weight !== undefined && {
+                weight: set.weight,
+              }),
+              ...(set.unit !== undefined && {
+                unit: set.unit,
+              }),
+              ...(set.rpe !== undefined && {
+                rpe: set.rpe,
+              }),
+              ...(set.isWarmup !== undefined && {
+                isWarmup: set.isWarmup,
+              }),
+            }))
+          : [],
+      })
+    );
+  }
+
+  return Object.keys(snapshot).length
+    ? snapshot
+    : undefined;
+};
+
+const buildPostReportSnapshot = ({
+  post,
+  author,
+  deletedAt,
+}) => ({
+  authorId: post.user || null,
+  authorName: author?.name || "",
+  authorHandle: author?.handle || "",
+  content: post.content || "",
+  tags: Array.isArray(post.tags) ? post.tags : [],
+  visibility: post.visibility || null,
+  workout: buildWorkoutSnapshot(post.workout),
+  deletedAt,
+});
+
+
+// Preserve report records while detaching them from posts that are being deleted.
+// The report itself is retained; only its limited post snapshot expires later.
+const snapshotReportsForPosts = async ({
+  posts = [],
+  session,
 }) => {
-  // ─────────────────────────────────────────────
-  // GET CURRENT USER
-  // ─────────────────────────────────────────────
+  if (!posts.length) {
+    return 0;
+  }
 
-  const currentUser = await User.findById(userId).select(
-    "following show_active_status"
+  const postIds = posts.map((post) => post._id).filter(Boolean);
+
+  if (!postIds.length) {
+    return 0;
+  }
+
+  const reports = await Report.find({
+    post: { $in: postIds },
+  })
+    .session(session)
+    .lean();
+
+  if (!reports.length) {
+    return 0;
+  }
+
+  const authorIds = [
+    ...new Set(
+      posts
+        .map((post) => idString(post.user))
+        .filter(Boolean)
+    ),
+  ];
+
+  const authors = authorIds.length
+    ? await User.find({
+        _id: { $in: authorIds },
+      })
+        .select("name handle")
+        .session(session)
+        .lean()
+    : [];
+
+  const authorMap = new Map(
+    authors.map((author) => [
+      idString(author._id),
+      author,
+    ])
   );
 
-  const followingIds = (currentUser?.following ?? []).map(
-    (id) => id.toString()
+  const postMap = new Map(
+    posts.map((post) => [
+      idString(post._id),
+      post,
+    ])
   );
 
-  const viewerShowsActiveStatus =
-    currentUser?.show_active_status !== false;
+  const deletedAt = new Date();
+  const snapshotExpiresAt = new Date(
+    deletedAt.getTime() +
+      REPORT_SNAPSHOT_RETENTION_DAYS * 24 * 60 * 60 * 1000
+  );
 
-  // ─────────────────────────────────────────────
-  // BUILD BASE QUERY
-  // ─────────────────────────────────────────────
+  const operations = reports
+    .map((report) => {
+      const reportedPost = postMap.get(idString(report.post));
 
-  let query = {};
+      if (!reportedPost) {
+        return null;
+      }
 
-  if (type === "following") {
-    query = {
-      $or: [
-        // User can always see their own posts
-        {
-          user: userId,
-        },
+      const author = authorMap.get(idString(reportedPost.user));
+      const postSnapshot = buildPostReportSnapshot({
+        post: reportedPost,
+        author,
+        deletedAt,
+      });
 
-        // Posts from people they follow
-        {
-          user: { $in: followingIds },
-          visibility: {
-            $in: ["public", "followers"],
+      return {
+        updateOne: {
+          filter: {
+            _id: report._id,
+            post: report.post,
+          },
+          update: {
+            $set: {
+              post: null,
+              originalPostId: report.post,
+              postSnapshot,
+              snapshotExpiresAt,
+            },
           },
         },
-      ],
-    };
-  } else {
-    // Community feed = public posts
-    query = {
-      visibility: "public",
+      };
+    })
+    .filter(Boolean);
+
+  if (operations.length) {
+    await Report.bulkWrite(operations, { session });
+  }
+
+  return operations.length;
+};
+
+const getDisplayPost = (post) =>
+  post?.isRepost && post.originalPost
+    ? post.originalPost
+    : post;
+
+const getEngagementData = (post, userId) => {
+  const displayPost = getDisplayPost(post);
+
+  let originalPostWithData = post?.originalPost || null;
+
+  if (post?.isRepost && post.originalPost) {
+    originalPostWithData = {
+      ...post.originalPost,
+      respectCount: post.originalPost.respects?.length || 0,
+      repostCount: post.originalPost.reposts?.length || 0,
+      didRespect: includesId(
+        post.originalPost.respects,
+        userId
+      ),
     };
   }
 
-  // ─────────────────────────────────────────────
-  // FETCH POSTS IN BATCHES
-  // ─────────────────────────────────────────────
+  return {
+    originalPost: originalPostWithData,
+    respectCount: displayPost?.respects?.length || 0,
+    repostCount: displayPost?.reposts?.length || 0,
+    didRespect: includesId(displayPost?.respects, userId),
+  };
+};
 
-  const batchSize = limitNumber * 2;
+const getActiveStatus = (author, viewer) => {
+  const visible =
+    author?.show_active_status !== false &&
+    viewer?.show_active_status !== false;
+
+  return {
+    last_active_at: visible
+      ? author?.last_active_at || null
+      : null,
+    isOnline: visible
+      ? Boolean(author?.isOnline)
+      : false,
+  };
+};
+
+const getFollowingIds = (user) =>
+  (user?.following || []).map(idString);
+
+const getHiddenPostIds = (user) =>
+  new Set((user?.hiddenPosts || []).map(idString));
+
+const getCommentCountMap = async (postIds = []) => {
+  if (!postIds.length) {
+    return new Map();
+  }
+
+  const counts = await Comment.aggregate([
+    {
+      $match: {
+        post: { $in: postIds },
+      },
+    },
+    {
+      $group: {
+        _id: "$post",
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  return new Map(
+    counts.map((item) => [
+      idString(item._id),
+      item.count,
+    ])
+  );
+};
+
+const populatePostQuery = (query) =>
+  query
+    .populate(
+      "user",
+      "name handle avatar last_active_at show_active_status isOnline"
+    )
+    .populate({
+      path: "originalPost",
+      populate: {
+        path: "user",
+        select: "name handle avatar",
+      },
+    });
+
+// ============================================================
+// PAGINATE VISIBLE POSTS
+// ============================================================
+
+const getPaginatedVisiblePosts = async ({
+  query,
+  pageNumber,
+  limitNumber,
+  userId,
+  canViewPostWithOriginal,
+  hiddenPostIds = new Set(),
+}) => {
+  const batchSize = Math.max(limitNumber * 2, 20);
+  const requiredPosts = pageNumber * limitNumber + 1;
+
+  const hiddenIds =
+    hiddenPostIds instanceof Set
+      ? hiddenPostIds
+      : new Set(hiddenPostIds || []);
 
   let databaseSkip = 0;
-  let visiblePosts = [];
+  const visiblePosts = [];
 
-  /*
-   * We don't use MongoDB's normal page skip here because
-   * some posts may be removed by the repost privacy check.
-   *
-   * Instead, we walk through the posts and collect only
-   * posts the viewer is actually allowed to see.
-   */
+  while (visiblePosts.length < requiredPosts) {
+    const request = populatePostQuery(
+      Post.find(query)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(databaseSkip)
+        .limit(batchSize)
+    );
 
-  const targetVisiblePosts = pageNumber * limitNumber;
+    const batch = await request.lean();
 
-  while (visiblePosts.length < targetVisiblePosts) {
-    const batch = await Post.find(query)
-      .sort({ createdAt: -1 })
-      .skip(databaseSkip)
-      .limit(batchSize)
-      .populate(
-        "user",
-        "name handle avatar last_active_at show_active_status isOnline"
-      )
-      .populate("originalPost")
-      .lean();
-
-    // No more posts in database
-    if (batch.length === 0) {
+    if (!batch.length) {
       break;
     }
 
     databaseSkip += batch.length;
 
-    // Remove posts whose author no longer exists
-    const validPosts = batch.filter(
-      (post) => post.user != null
-    );
+    for (const post of batch) {
+      if (!post.user) {
+        continue;
+      }
 
-    // ─────────────────────────────────────────────
-    // POST VISIBILITY FILTER
-    // ─────────────────────────────────────────────
+      const isHidden =
+        hiddenIds.has(idString(post._id)) ||
+        (post.originalPost &&
+          hiddenIds.has(idString(post.originalPost._id)));
 
-    for (const post of validPosts) {
+      if (isHidden) {
+        continue;
+      }
+
       const allowed = await canViewPostWithOriginal(
         post,
         userId
@@ -150,97 +359,173 @@ export const getFeedService = async ({
       }
 
       visiblePosts.push(post);
+
+      if (visiblePosts.length >= requiredPosts) {
+        break;
+      }
     }
 
-    // If this batch was smaller than requested,
-    // there are no more posts to fetch.
     if (batch.length < batchSize) {
       break;
     }
   }
 
-  // ─────────────────────────────────────────────
-  // GET THE REQUESTED PAGE
-  // ─────────────────────────────────────────────
+  const startIndex = (pageNumber - 1) * limitNumber;
 
-  const startIndex =
-    (pageNumber - 1) * limitNumber;
+  return {
+    posts: visiblePosts.slice(
+      startIndex,
+      startIndex + limitNumber
+    ),
+    hasMore:
+      visiblePosts.length > startIndex + limitNumber,
+  };
+};
 
-  const pagePosts = visiblePosts.slice(
-    startIndex,
-    startIndex + limitNumber
+// ============================================================
+// FORMAT POST RESULTS
+// ============================================================
+
+const formatPostsWithData = ({
+  posts,
+  userId,
+  currentUser,
+  followingIds,
+  commentCountMap,
+  isSaved = false,
+}) => {
+  return posts.map((post) => {
+    const engagement = getEngagementData(post, userId);
+
+    const isOwnPost =
+      idString(post.user?._id) === idString(userId);
+
+    const activeStatus = getActiveStatus(
+      post.user,
+      currentUser
+    );
+
+    return {
+      ...post,
+      ...engagement,
+
+      commentCount:
+        commentCountMap.get(idString(post._id)) || 0,
+
+      ...(isSaved ? { isSaved: true } : {}),
+
+      user: post.user
+        ? {
+            ...post.user,
+            isFollowing: isOwnPost
+              ? false
+              : followingIds.includes(
+                  idString(post.user._id)
+                ),
+            ...activeStatus,
+          }
+        : null,
+    };
+  });
+};
+
+// ============================================================
+// CREATE POST
+// ============================================================
+
+export const createPostService = async ({
+  userId,
+  content,
+  workout,
+  media,
+  visibility,
+}) => {
+  // Normalize and validate workout data before saving.
+  const normalizedWorkout = normalizeWorkout(workout);
+
+  const post = await Post.create({
+    user: userId,
+    content,
+    workout: normalizedWorkout,
+    media,
+    visibility,
+  });
+
+  await post.populate({
+    path: "user",
+    select: "name handle avatar",
+  });
+
+  return post;
+};
+
+// ============================================================
+// GET FEED
+// ============================================================
+
+export const getFeedService = async ({
+  userId,
+  pageNumber,
+  limitNumber,
+  type,
+  canViewPostWithOriginal,
+}) => {
+  const currentUser = await User.findById(userId).select(
+    "following hiddenPosts show_active_status"
   );
 
-  // ─────────────────────────────────────────────
-  // ADD RESPONSE DATA
-  // ─────────────────────────────────────────────
+  if (!currentUser) {
+    throw new NotFoundError("User not found");
+  }
 
-  const postsWithData = await Promise.all(
-    pagePosts.map(async (post) => {
-      const commentCount =
-        await Comment.countDocuments({
-          post: post._id,
-        });
+  const followingIds = getFollowingIds(currentUser);
+  const hiddenPostIds = getHiddenPostIds(currentUser);
 
-      const isOwnPost =
-        post.user?._id?.toString() ===
-        userId.toString();
+  let query;
 
-      // Active status reciprocity
-      const authorShowsActiveStatus =
-        post.user?.show_active_status !== false;
+  if (type === "following") {
+    query = {
+      $or: [
+        {
+          user: userId,
+        },
+        {
+          user: { $in: followingIds },
+          visibility: {
+            $in: ["public", "followers"],
+          },
+        },
+      ],
+    };
+  } else {
+    query = {
+      visibility: "public",
+    };
+  }
 
-      const showActiveStatus =
-        authorShowsActiveStatus &&
-        viewerShowsActiveStatus;
+  const { posts: pagePosts, hasMore } =
+    await getPaginatedVisiblePosts({
+      query,
+      pageNumber,
+      limitNumber,
+      userId,
+      canViewPostWithOriginal,
+      hiddenPostIds,
+    });
 
-      return {
-        ...post,
+  // Comments belong to the displayed document.
+  // A repost has its own comment thread.
+  const postIds = pagePosts.map((post) => post._id);
 
-        respectCount:
-          post.respects?.length || 0,
+  const commentCountMap = await getCommentCountMap(postIds);
 
-        commentCount,
-
-        didRespect:
-          post.respects?.some(
-            (r) =>
-              r.toString() ===
-              userId.toString()
-          ) || false,
-
-        user: post.user
-          ? {
-              ...post.user,
-
-              isFollowing: isOwnPost
-                ? false
-                : followingIds.includes(
-                    post.user._id.toString()
-                  ),
-
-              last_active_at:
-                showActiveStatus
-                  ? post.user.last_active_at
-                  : null,
-
-              isOnline:
-                showActiveStatus
-                  ? post.user.isOnline
-                  : false,
-            }
-          : post.user,
-      };
-    })
-  );
-
-  // ─────────────────────────────────────────────
-  // PAGINATION
-  // ─────────────────────────────────────────────
-
-  const hasMore =
-    visiblePosts.length >
-    startIndex + limitNumber;
+  const postsWithData = formatPostsWithData({
+    posts: pagePosts,
+    userId,
+    currentUser,
+    followingIds,
+    commentCountMap,
+  });
 
   return {
     posts: postsWithData,
@@ -252,23 +537,22 @@ export const getFeedService = async ({
   };
 };
 
-//Service : Get Post By Id
-// Service: Get Post By Id
+// ============================================================
+// GET POST BY ID
+// ============================================================
+
 export const getPostService = async ({
   postId,
   userId,
   canViewPostWithOriginal,
 }) => {
-  const post = await Post.findById(postId)
-    .populate(
-      "user",
-      "name handle avatar last_active_at show_active_status isOnline"
-    )
-    .populate("originalPost");
+  const post = await populatePostQuery(
+    Post.findById(postId)
+  );
 
- if (!post) {
-  throw new NotFoundError("Post not found");
-}
+  if (!post) {
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -281,53 +565,45 @@ export const getPostService = async ({
     );
   }
 
-  // Get all comments
-  const comments = await Comment.find({
-    post: postId,
-  })
-    .populate("user", "name handle avatar")
-    .sort({
-      createdAt: 1,
-    });
+  const [comments, viewer] = await Promise.all([
+    Comment.find({ post: postId })
+      .populate("user", "name handle avatar")
+      .sort({ createdAt: 1 }),
 
-  // Convert flat comments into a nested comment tree
+    User.findById(userId).select("show_active_status"),
+  ]);
+
   const commentsWithReactions = buildCommentTree(
     comments,
     userId
   );
 
-  // Active status
-  const [viewer, author] = await Promise.all([
-    User.findById(userId).select("show_active_status"),
-    User.findById(post.user?._id).select("show_active_status"),
-  ]);
-
-  const showActiveStatus =
-    author?.show_active_status !== false &&
-    viewer?.show_active_status !== false;
-
   const postObj = post.toObject();
 
   if (postObj.user) {
-    postObj.user.last_active_at = showActiveStatus
-      ? postObj.user.last_active_at
-      : null;
-
-    postObj.user.isOnline = showActiveStatus
-      ? postObj.user.isOnline
-      : false;
+    Object.assign(
+      postObj.user,
+      getActiveStatus(postObj.user, viewer)
+    );
   }
+
+  const engagement = getEngagementData(
+    postObj,
+    userId
+  );
 
   return {
     ...postObj,
-    didRespect: post.didUserRespect(userId),
+    ...engagement,
     comments: commentsWithReactions,
     commentCount: comments.length,
   };
 };
 
-//Service : Get User Posts
-// Service: Get User Posts
+// ============================================================
+// GET USER POSTS
+// ============================================================
+
 export const getUserPostsService = async ({
   userId,
   currentUserId,
@@ -335,168 +611,94 @@ export const getUserPostsService = async ({
   limitNumber,
   canViewPostWithOriginal,
 }) => {
-  const skip =
-    (pageNumber - 1) * limitNumber;
-
-  // Determine profile visibility
   const isOwnProfile =
-    currentUserId.toString() ===
-    userId.toString();
+    idString(currentUserId) === idString(userId);
 
-  let visibilityFilter = {
-    visibility: "public",
-  };
+  const profileOwner = await User.findById(userId).select(
+    "followers"
+  );
+
+  if (!profileOwner) {
+    throw new NotFoundError("User not found");
+  }
+
+  const viewerFollowsOwner = includesId(
+    profileOwner.followers,
+    currentUserId
+  );
+
+  let visibilityFilter;
 
   if (isOwnProfile) {
     visibilityFilter = {};
+  } else if (viewerFollowsOwner) {
+    visibilityFilter = {
+      visibility: {
+        $in: ["public", "followers"],
+      },
+    };
   } else {
-    const profileOwner =
-      await User.findById(userId)
-        .select("followers");
-
-    const viewerFollowsOwner =
-      profileOwner?.followers?.some(
-        (id) =>
-          id.toString() ===
-          currentUserId.toString()
-      );
-
-    if (viewerFollowsOwner) {
-      visibilityFilter = {
-        visibility: {
-          $in: [
-            "public",
-            "followers",
-          ],
-        },
-      };
-    }
+    visibilityFilter = {
+      visibility: "public",
+    };
   }
 
+  // Both normal posts and repost documents are returned.
+  // The frontend can separate them using post.isRepost.
   const query = {
     user: userId,
     ...visibilityFilter,
   };
 
-  // Active status
-  const [viewer, author] =
-    await Promise.all([
-      User.findById(currentUserId)
-        .select("show_active_status"),
+  const [viewer, currentUser] = await Promise.all([
+    User.findById(currentUserId).select(
+      "show_active_status hiddenPosts"
+    ),
+    User.findById(currentUserId).select("following"),
+  ]);
 
-      User.findById(userId)
-        .select("show_active_status"),
-    ]);
-
-  const showActiveStatus =
-    author?.show_active_status !== false &&
-    viewer?.show_active_status !== false;
-
-  // Fetch posts
-  const posts = await Post.find(query)
-    .sort({
-      createdAt: -1,
-      _id: -1,
-    })
-    .skip(skip)
-    .limit(limitNumber)
-    .populate(
-      "user",
-      "name handle avatar last_active_at show_active_status isOnline"
-    )
-    .populate("workout")
-    .populate("originalPost")
-    .lean();
-
-  // Repost privacy filter
-  const visiblePosts = [];
-
-  for (const post of posts) {
-    if (!post.user) {
-      continue;
-    }
-
-    const allowed =
-      await canViewPostWithOriginal(
-        post,
-        currentUserId
-      );
-
-    if (!allowed) {
-      continue;
-    }
-
-    visiblePosts.push(post);
+  if (!viewer || !currentUser) {
+    throw new NotFoundError("User not found");
   }
 
-  // Response data
-  const postsWithData =
-    await Promise.all(
-      visiblePosts.map(async (post) => {
-        const commentCount =
-          await Comment.countDocuments({
-            post: post._id,
-          });
+  const hiddenPostIds = getHiddenPostIds(viewer);
+  const followingIds = getFollowingIds(currentUser);
 
-        const userWithActiveStatus =
-          post.user
-            ? {
-                ...post.user,
+  const { posts: pagePosts, hasMore } =
+    await getPaginatedVisiblePosts({
+      query,
+      pageNumber,
+      limitNumber,
+      userId: currentUserId,
+      canViewPostWithOriginal,
+      hiddenPostIds,
+    });
 
-                last_active_at:
-                  showActiveStatus
-                    ? post.user.last_active_at
-                    : null,
+  const postIds = pagePosts.map((post) => post._id);
 
-                isOnline:
-                  showActiveStatus
-                    ? post.user.isOnline
-                    : false,
-              }
-            : null;
+  const commentCountMap = await getCommentCountMap(postIds);
 
-        return {
-          ...post,
-
-          user: userWithActiveStatus,
-
-          respectCount:
-            post.respects?.length || 0,
-
-          commentCount,
-
-          didRespect:
-            post.respects?.some(
-              (r) =>
-                r.toString() ===
-                currentUserId.toString()
-            ) || false,
-        };
-      })
-    );
-
-  const totalPosts =
-    await Post.countDocuments(query);
+  const postsWithData = formatPostsWithData({
+    posts: pagePosts,
+    userId: currentUserId,
+    currentUser: viewer,
+    followingIds,
+    commentCountMap,
+  });
 
   return {
     posts: postsWithData,
-
     pagination: {
       currentPage: pageNumber,
-      totalPages: Math.ceil(
-        totalPosts / limitNumber
-      ),
-      totalPosts,
-
-      hasMore:
-        skip + posts.length <
-        totalPosts,
+      hasMore,
     },
   };
 };
 
+// ============================================================
+// GET SAVED POSTS
+// ============================================================
 
-// Service: Get Saved Posts
 export const getSavedPostsService = async ({
   userId,
   pageNumber,
@@ -513,7 +715,7 @@ export const getSavedPostsService = async ({
 
   const savedPostIds = currentUser.savedPosts || [];
 
-  if (savedPostIds.length === 0) {
+  if (!savedPostIds.length) {
     return {
       posts: [],
       pagination: {
@@ -525,65 +727,41 @@ export const getSavedPostsService = async ({
     };
   }
 
-  const followingIds = (currentUser.following || []).map(
-    (id) => id.toString()
-  );
+  const followingIds = getFollowingIds(currentUser);
 
-  const viewerShowsActiveStatus =
-    currentUser.show_active_status !== false;
-
-  /*
-   * Saved posts are stored as IDs on the User document.
-   *
-   * We process them in batches instead of loading every
-   * saved post into memory at once.
-   *
-   * Reverse the IDs so the newest saved post appears first.
-   */
+  // Most recently saved first.
   const orderedSavedPostIds = [...savedPostIds].reverse();
 
-  const BATCH_SIZE = Math.max(limitNumber * 2, 20);
+  const batchSize = Math.max(limitNumber * 2, 20);
 
   let databaseIndex = 0;
-  let visiblePosts = [];
+  const visiblePosts = [];
 
+  // Scan all saved IDs to calculate accurate total counts.
   while (databaseIndex < orderedSavedPostIds.length) {
     const batchIds = orderedSavedPostIds.slice(
       databaseIndex,
-      databaseIndex + BATCH_SIZE
+      databaseIndex + batchSize
     );
 
-    const posts = await Post.find({
-      _id: {
-        $in: batchIds,
-      },
-    })
-      .populate(
-        "user",
-        "name handle avatar last_active_at show_active_status isOnline"
-      )
-      .populate("workout")
-      .populate("originalPost")
-      .lean();
+    const posts = await populatePostQuery(
+      Post.find({
+        _id: { $in: batchIds },
+      })
+    ).lean();
 
     const postMap = new Map(
       posts.map((post) => [
-        post._id.toString(),
+        idString(post._id),
         post,
       ])
     );
 
-    /*
-     * Restore savedPosts order because MongoDB does not
-     * guarantee the order of $in results.
-     */
+    // Preserve the user's saved order.
     const orderedBatch = batchIds
-      .map((id) => postMap.get(id.toString()))
+      .map((id) => postMap.get(idString(id)))
       .filter(Boolean);
 
-    /*
-     * Check whether each saved post is still visible.
-     */
     for (const post of orderedBatch) {
       if (!post.user) {
         continue;
@@ -602,137 +780,47 @@ export const getSavedPostsService = async ({
     }
 
     databaseIndex += batchIds.length;
-
-    /*
-     * We only need enough visible posts to build
-     * the requested page plus one extra post.
-     *
-     * The extra post lets us determine hasMore.
-     */
-    const requiredPosts =
-      pageNumber * limitNumber + 1;
-
-    if (visiblePosts.length >= requiredPosts) {
-      break;
-    }
   }
 
-  /*
-   * Determine the requested page from the visible posts.
-   */
-  const startIndex =
-    (pageNumber - 1) * limitNumber;
+  const startIndex = (pageNumber - 1) * limitNumber;
 
   const pagePosts = visiblePosts.slice(
     startIndex,
     startIndex + limitNumber
   );
 
-  /*
-   * If we stopped early because we found enough posts,
-   * there is another page.
-   */
   const hasMore =
-    visiblePosts.length >
-    startIndex + limitNumber;
+    visiblePosts.length > startIndex + limitNumber;
 
-  /*
-   * Build response data.
-   */
-  const postsWithData = await Promise.all(
-    pagePosts.map(async (post) => {
-      const commentCount =
-        await Comment.countDocuments({
-          post: post._id,
-        });
+  const postIds = pagePosts.map((post) => post._id);
 
-      const isOwnPost =
-        post.user?._id?.toString() ===
-        userId.toString();
+  const commentCountMap = await getCommentCountMap(postIds);
 
-      const authorShowsActiveStatus =
-        post.user?.show_active_status !== false;
-
-      const showActiveStatus =
-        authorShowsActiveStatus &&
-        viewerShowsActiveStatus;
-
-      return {
-        ...post,
-
-        isSaved: true,
-
-        respectCount:
-          post.respects?.length || 0,
-
-        commentCount,
-
-        didRespect:
-          post.respects?.some(
-            (r) =>
-              r.toString() ===
-              userId.toString()
-          ) || false,
-
-        user: post.user
-          ? {
-              ...post.user,
-
-              isFollowing: isOwnPost
-                ? false
-                : followingIds.includes(
-                    post.user._id.toString()
-                  ),
-
-              last_active_at:
-                showActiveStatus
-                  ? post.user.last_active_at
-                  : null,
-
-              isOnline:
-                showActiveStatus
-                  ? post.user.isOnline
-                  : false,
-            }
-          : null,
-      };
-    })
-  );
-
-  /*
-   * totalPosts is the number of visible saved posts
-   * that we have evaluated so far.
-   *
-   * If we processed every saved post, this is the
-   * complete total.
-   *
-   * If we stopped early, we intentionally don't claim
-   * an exact total.
-   */
-  const processedAllPosts =
-    databaseIndex >= orderedSavedPostIds.length;
-
-  const totalPosts = processedAllPosts
-    ? visiblePosts.length
-    : undefined;
+  const postsWithData = formatPostsWithData({
+    posts: pagePosts,
+    userId,
+    currentUser,
+    followingIds,
+    commentCountMap,
+    isSaved: true,
+  });
 
   return {
     posts: postsWithData,
-
     pagination: {
       currentPage: pageNumber,
-      ...(totalPosts !== undefined && {
-        totalPages: Math.ceil(
-          totalPosts / limitNumber
-        ),
-        totalPosts,
-      }),
+      totalPosts: visiblePosts.length,
+      totalPages: Math.ceil(
+        visiblePosts.length / limitNumber
+      ),
       hasMore,
     },
   };
 };
 
-//Service : Update Post
+// ============================================================
+// UPDATE POST
+// ============================================================
 
 export const updatePostService = async ({
   postId,
@@ -741,68 +829,178 @@ export const updatePostService = async ({
 }) => {
   const post = await Post.findById(postId);
 
-if (!post) {
-  throw new NotFoundError("Post not found");
-}
+  if (!post) {
+    throw new NotFoundError("Post not found");
+  }
 
-  if (post.user.toString() !== userId.toString()) {
+  if (idString(post.user) !== idString(userId)) {
     throw new ForbiddenError(
       "Not authorized to update this post"
     );
   }
 
-  const updatedPost =
-    await Post.findByIdAndUpdate(
-      postId,
-      { $set: updates },
-      {
-        new: true,
-        runValidators: true,
-      }
+  const safeUpdates = { ...updates };
+
+  // Normalize workout data only when the request includes it.
+  if (
+    Object.prototype.hasOwnProperty.call(
+      safeUpdates,
+      "workout"
+    )
+  ) {
+    safeUpdates.workout = normalizeWorkout(
+      safeUpdates.workout
     );
+  }
+
+  const updatedPost = await Post.findOneAndUpdate(
+    {
+      _id: postId,
+      user: userId,
+    },
+    {
+      $set: safeUpdates,
+    },
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).populate("user", "name handle avatar");
+
+  if (!updatedPost) {
+    throw new NotFoundError("Post not found");
+  }
 
   return updatedPost;
 };
 
-// Service: Delete Post
+// ============================================================
+// DELETE POST
+// ============================================================
+
 export const deletePostService = async ({
   postId,
   userId,
 }) => {
-  const post = await Post.findById(postId);
+  const session = await mongoose.startSession();
 
-  if (!post) {
-  throw new NotFoundError("Post not found");
-}
-  if (post.user.toString() !== userId.toString()) {
-    throw new ForbiddenError(
-      "You can only delete your own posts"
-    );
+  try {
+    await session.withTransaction(async () => {
+      const post = await Post.findById(postId).session(session);
+
+      if (!post) {
+        throw new NotFoundError("Post not found");
+      }
+
+      if (idString(post.user) !== idString(userId)) {
+        throw new ForbiddenError(
+          "You can only delete your own posts"
+        );
+      }
+
+      const postIdsToDelete = [post._id];
+
+      // Deleting an original also deletes all of its repost documents.
+      if (!post.isRepost) {
+        const reposts = await Post.find({
+          originalPost: post._id,
+          isRepost: true,
+        })
+          .select("_id")
+          .session(session)
+          .lean();
+
+        postIdsToDelete.push(
+          ...reposts.map((repost) => repost._id)
+        );
+      }
+
+      // Fetch full documents so each report gets a snapshot of the
+      // exact post it refers to, including repost-specific content.
+      const postsForSnapshots = await Post.find({
+        _id: { $in: postIdsToDelete },
+      })
+        .session(session)
+        .lean();
+
+      await snapshotReportsForPosts({
+        posts: postsForSnapshots,
+        session,
+      });
+
+      // Deleting one repost removes its embedded entry from the original.
+      if (post.isRepost && post.originalPost) {
+        await Post.updateOne(
+          { _id: post.originalPost },
+          {
+            $pull: {
+              reposts: {
+                user: post.user,
+              },
+            },
+          },
+          { session }
+        );
+      }
+
+      await Comment.deleteMany({
+        post: { $in: postIdsToDelete },
+      }).session(session);
+
+      await User.updateMany(
+        {
+          savedPosts: { $in: postIdsToDelete },
+        },
+        {
+          $pull: {
+            savedPosts: {
+              $in: postIdsToDelete,
+            },
+          },
+        }
+      ).session(session);
+
+      await User.updateMany(
+        {
+          hiddenPosts: { $in: postIdsToDelete },
+        },
+        {
+          $pull: {
+            hiddenPosts: {
+              $in: postIdsToDelete,
+            },
+          },
+        }
+      ).session(session);
+
+      await Post.deleteMany({
+        _id: { $in: postIdsToDelete },
+      }).session(session);
+    });
+
+    return true;
+  } finally {
+    await session.endSession();
   }
-
-  await Comment.deleteMany({
-    post: postId,
-  });
-
-  await Post.findByIdAndDelete(postId);
-
-  return true;
 };
 
-// Service: Give / Remove Respect
+// ============================================================
+// GIVE / REMOVE RESPECT
+// ============================================================
+
 export const giveRespectService = async ({
   postId,
   userId,
   canViewPostWithOriginal,
 }) => {
-  const post = await Post.findById(postId);
+  const requestedPost = await Post.findById(postId);
 
-  if (!post) {
-    return null;
+  if (!requestedPost) {
+    throw new NotFoundError("Post not found");
   }
 
   const allowed = await canViewPostWithOriginal(
-    post,
+    requestedPost,
     userId
   );
 
@@ -812,83 +1010,103 @@ export const giveRespectService = async ({
     );
   }
 
-  // Defensive: ensure respects is an array
-  if (!Array.isArray(post.respects)) {
-    post.respects = [];
-  }
+  // Reposts share engagement with the original post.
+  const targetPostId =
+    requestedPost.isRepost && requestedPost.originalPost
+      ? requestedPost.originalPost
+      : requestedPost._id;
 
-  const alreadyRespected = post.respects.some(
-    (r) =>
-      r.toString() === userId.toString()
-  );
-
-  let newRespects;
-
-  if (alreadyRespected) {
-    newRespects = post.respects.filter(
-      (r) =>
-        r.toString() !== userId.toString()
-    );
-  } else {
-    newRespects = [
-      ...post.respects,
-      userId,
-    ];
-  }
-
-  await Post.updateOne(
-    { _id: postId },
+  // Atomic toggle.
+  const removed = await Post.findOneAndUpdate(
     {
-      $set: {
-        respects: newRespects,
+      _id: targetPostId,
+      respects: userId,
+    },
+    {
+      $pull: {
+        respects: userId,
       },
+    },
+    {
+      new: true,
     }
-  );
+  ).select("user respects");
 
-  // Create notification only when adding respect,
-  // not when removing respect.
-  if (
-    !alreadyRespected &&
-    post.user.toString() !== userId.toString()
-  ) {
+  if (removed) {
+    return {
+      respected: false,
+      respectCount: removed.respects.length,
+    };
+  }
+
+  const added = await Post.findOneAndUpdate(
+    {
+      _id: targetPostId,
+      respects: { $ne: userId },
+    },
+    {
+      $addToSet: {
+        respects: userId,
+      },
+    },
+    {
+      new: true,
+    }
+  ).select("user respects");
+
+  if (!added) {
+    const latest = await Post.findById(targetPostId)
+      .select("user respects");
+
+    if (!latest) {
+      throw new NotFoundError("Original post not found");
+    }
+
+    return {
+      respected: includesId(latest.respects, userId),
+      respectCount: latest.respects.length,
+    };
+  }
+
+  if (idString(added.user) !== idString(userId)) {
     try {
-      await Notification.create({
-        recipient: post.user,
+      await createNotificationService({
+        recipient: added.user,
         sender: userId,
         type: "respect",
-        workout: post._id,
+        workout: targetPostId,
       });
-    } catch (notifErr) {
+    } catch (error) {
       console.error(
         "Failed to create respect notification:",
-        notifErr
+        error
       );
     }
   }
 
   return {
-    respected: !alreadyRespected,
-    respectCount: newRespects.length,
+    respected: true,
+    respectCount: added.respects.length,
   };
 };
 
-// Service: Get Respects
+// ============================================================
+// GET RESPECTS
+// ============================================================
+
 export const getRespectsService = async ({
   postId,
   currentUserId,
   canViewPostWithOriginal,
 }) => {
-  const post = await Post.findById(postId).populate(
-    "respects",
-    "name handle avatar bio followers"
-  );
+  const requestedPost = await Post.findById(postId);
 
- if (!post) {
-  throw new NotFoundError("Post not found");
-}
+  if (!requestedPost) {
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
-    post,
+    requestedPost,
     currentUserId
   );
 
@@ -898,27 +1116,39 @@ export const getRespectsService = async ({
     );
   }
 
-  // Defensive: handle undefined respects
-  const respects = post.respects || [];
+  const targetPostId =
+    requestedPost.isRepost && requestedPost.originalPost
+      ? requestedPost.originalPost
+      : requestedPost._id;
 
-  const users = respects.map((u) => ({
-    id: u._id,
-    name: u.name,
-    handle: `@${u.handle}`,
-    avatar: u.avatar,
-    bio: u.bio,
+  const targetPost = await Post.findById(
+    targetPostId
+  ).populate(
+    "respects",
+    "name handle avatar bio followers"
+  );
 
-    isFollowing:
-      u.followers?.some(
-        (id) =>
-          id.toString() === currentUserId.toString()
-      ) || false,
+  if (!targetPost) {
+    throw new NotFoundError("Original post not found");
+  }
+
+  return (targetPost.respects || []).map((user) => ({
+    id: user._id,
+    name: user.name,
+    handle: `@${user.handle}`,
+    avatar: user.avatar,
+    bio: user.bio,
+    isFollowing: includesId(
+      user.followers,
+      currentUserId
+    ),
   }));
-
-  return users;
 };
 
-// Service: Add Comment
+// ============================================================
+// ADD COMMENT
+// ============================================================
+
 export const addCommentService = async ({
   postId,
   userId,
@@ -929,8 +1159,8 @@ export const addCommentService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-  throw new NotFoundError("Post not found");
-}
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -946,24 +1176,30 @@ export const addCommentService = async ({
   let parent = null;
 
   if (parentComment) {
-    parent = await Comment.findById(parentComment);
+    const requestedParent = await Comment.findById(
+      parentComment
+    );
 
     if (
-      !parent ||
-      parent.post.toString() !== postId.toString()
+      !requestedParent ||
+      idString(requestedParent.post) !== idString(postId)
     ) {
-      throw new BadRequestError(
-        "Invalid parent comment"
-      );
+      throw new BadRequestError("Invalid parent comment");
     }
 
     // Keep threads one level deep.
-    // If replying to a reply, attach the new comment
-    // to the original top-level comment.
-    if (parent.parentComment) {
-      parent = await Comment.findById(
-        parent.parentComment
-      );
+    parent = requestedParent.parentComment
+      ? await Comment.findById(
+          requestedParent.parentComment
+        )
+      : requestedParent;
+
+    if (
+      !parent ||
+      idString(parent.post) !== idString(postId) ||
+      parent.parentComment
+    ) {
+      throw new BadRequestError("Invalid parent comment");
     }
   }
 
@@ -971,9 +1207,7 @@ export const addCommentService = async ({
     post: postId,
     user: userId,
     content: content.trim(),
-    parentComment: parent
-      ? parent._id
-      : null,
+    parentComment: parent ? parent._id : null,
   });
 
   await comment.populate(
@@ -988,18 +1222,13 @@ export const addCommentService = async ({
   commentObj.myReaction = null;
   commentObj.replies = [];
 
-  // Notify the parent comment's author for a reply,
-  // otherwise notify the post owner.
   const notifyRecipient = parent
     ? parent.user
     : post.user;
 
-  if (
-    notifyRecipient.toString() !==
-    userId.toString()
-  ) {
+  if (idString(notifyRecipient) !== idString(userId)) {
     try {
-      await Notification.create({
+      await createNotificationService({
         recipient: notifyRecipient,
         sender: userId,
         type: "comment",
@@ -1007,10 +1236,10 @@ export const addCommentService = async ({
         comment: comment.content,
         commentId: comment._id,
       });
-    } catch (notifErr) {
+    } catch (error) {
       console.error(
         "Failed to create comment notification:",
-        notifErr
+        error
       );
     }
   }
@@ -1018,7 +1247,10 @@ export const addCommentService = async ({
   return commentObj;
 };
 
-// Service: Get Comments
+// ============================================================
+// GET COMMENTS
+// ============================================================
+
 export const getCommentsService = async ({
   postId,
   userId,
@@ -1026,9 +1258,9 @@ export const getCommentsService = async ({
 }) => {
   const post = await Post.findById(postId);
 
- if (!post) {
-  throw new NotFoundError("Post not found");
-}
+  if (!post) {
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -1045,63 +1277,70 @@ export const getCommentsService = async ({
     post: postId,
   })
     .populate("user", "name handle avatar")
-    .sort({
-      createdAt: 1,
-    });
+    .sort({ createdAt: 1 });
 
-  return buildCommentTree(
-    allComments,
-    userId
-  );
+  return buildCommentTree(allComments, userId);
 };
 
-// Service: Delete Comment
+
+ // ============================================================
+ // DELETE COMMENT
+ // ============================================================
+
 export const deleteCommentService = async ({
+  postId,
   commentId,
   userId,
 }) => {
-  const comment = await Comment.findById(commentId);
+  const comment = await Comment.findOne({
+    _id: commentId,
+    post: postId,
+  });
 
   if (!comment) {
-  throw new NotFoundError("Comment not found");
-}
+    throw new NotFoundError("Comment not found on this post");
+  }
 
-  if (
-    comment.user.toString() !==
-    userId.toString()
-  ) {
+  if (idString(comment.user) !== idString(userId)) {
     throw new ForbiddenError(
       "You can only delete your own comments"
     );
   }
 
-  // Remove replies so they don't become
-  // orphaned after the parent is deleted.
+  // Delete replies before deleting the parent.
   await Comment.deleteMany({
     parentComment: commentId,
+    post: postId,
   });
 
-  await Comment.findByIdAndDelete(commentId);
+  await Comment.findOneAndDelete({
+    _id: commentId,
+    post: postId,
+  });
 
   return true;
 };
 
-// Service: Update Comment
+// ============================================================
+// UPDATE COMMENT
+// ============================================================
+
 export const updateCommentService = async ({
+  postId,
   commentId,
   userId,
   content,
 }) => {
-  const comment = await Comment.findById(commentId);
+  const comment = await Comment.findOne({
+    _id: commentId,
+    post: postId,
+  });
 
- if (!comment) {
-  throw new NotFoundError("Comment not found");
-}
+  if (!comment) {
+    throw new NotFoundError("Comment not found on this post");
+  }
 
-  if (
-    comment.user.toString() !==
-    userId.toString()
-  ) {
+  if (idString(comment.user) !== idString(userId)) {
     throw new ForbiddenError(
       "You can only edit your own comments"
     );
@@ -1111,16 +1350,14 @@ export const updateCommentService = async ({
 
   await comment.save();
 
-  const populatedComment =
-    await comment.populate(
-      "user",
-      "name handle avatar"
-    );
+  const populatedComment = await comment.populate(
+    "user",
+    "name handle avatar"
+  );
 
-  const commentObj =
-    populatedComment.toObject({
-      virtuals: true,
-    });
+  const commentObj = populatedComment.toObject({
+    virtuals: true,
+  });
 
   commentObj.myReaction =
     populatedComment.getUserReaction(userId);
@@ -1128,24 +1365,31 @@ export const updateCommentService = async ({
   return commentObj;
 };
 
-// Service: React to Comment
+// ============================================================
+// REACT TO COMMENT
+// ============================================================
+
 export const reactToCommentService = async ({
+  postId,
   commentId,
   userId,
   emoji,
   canViewPostWithOriginal,
 }) => {
-  const comment = await Comment.findById(commentId);
+  const comment = await Comment.findOne({
+    _id: commentId,
+    post: postId,
+  });
 
-if (!comment) {
-  throw new NotFoundError("Comment not found");
-}
+  if (!comment) {
+    throw new NotFoundError("Comment not found on this post");
+  }
 
-  const post = await Post.findById(comment.post);
+  const post = await Post.findById(postId);
 
- if (!post) {
-  throw new NotFoundError("Post not found");
-}
+  if (!post) {
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -1158,33 +1402,24 @@ if (!comment) {
     );
   }
 
-  const existingIndex =
-    comment.reactions.findIndex(
-      (r) =>
-        r.user.toString() ===
-        userId.toString()
-    );
+  const existingIndex = comment.reactions.findIndex(
+    (reaction) =>
+      idString(reaction.user) === idString(userId)
+  );
 
   let myReaction = emoji;
 
   if (existingIndex !== -1) {
-    const existing =
+    const existingReaction =
       comment.reactions[existingIndex];
 
-    if (existing.emoji === emoji) {
-      // Clicking the same emoji again removes the reaction.
-      comment.reactions.splice(
-        existingIndex,
-        1
-      );
-
+    if (existingReaction.emoji === emoji) {
+      comment.reactions.splice(existingIndex, 1);
       myReaction = null;
     } else {
-      // Change existing reaction.
-      existing.emoji = emoji;
+      existingReaction.emoji = emoji;
     }
   } else {
-    // Add new reaction.
     comment.reactions.push({
       user: userId,
       emoji,
@@ -1199,136 +1434,262 @@ if (!comment) {
   };
 };
 
-// Service: Repost / Remove Repost
+
+// ============================================================
+// REPOST / REMOVE REPOST
+// ============================================================
+
 export const repostService = async ({
   postId,
   userId,
   canViewPost,
 }) => {
-  // 1. Find the original post
-  const originalPost = await Post.findById(postId);
+  const session = await mongoose.startSession();
 
-  if (!originalPost) {
-  throw new NotFoundError("Post not found");
-}
+  let result = null;
+  let createdRepostId = null;
 
-  // 2. Do not allow nested reposts
-  if (originalPost.isRepost) {
-    throw new BadRequestError(
-      "You cannot repost a repost"
-    );
-  }
+  try {
+    await session.withTransaction(async () => {
+      // Reset values because MongoDB may retry a transaction.
+      result = null;
+      createdRepostId = null;
 
-  // 3. Private posts cannot be reposted
-  if (originalPost.visibility === "private") {
-    throw new ForbiddenError(
-      "Private posts cannot be reposted"
-    );
-  }
+      const originalPost = await Post.findById(postId)
+        .session(session);
 
-  // 4. User must be able to see the original
-  const canViewOriginal = await canViewPost(
-    originalPost,
-    userId
-  );
+      if (!originalPost) {
+        throw new NotFoundError("Post not found");
+      }
 
-  if (!canViewOriginal) {
-    throw new ForbiddenError(
-      "You do not have permission to repost this post"
-    );
-  }
+      if (originalPost.isRepost) {
+        throw new BadRequestError(
+          "You cannot repost a repost"
+        );
+      }
 
-  // 5. Check whether user already reposted it
-  const alreadyReposted = await Post.findOne({
-    user: userId,
-    originalPost: originalPost._id,
-    isRepost: true,
-  });
+      if (originalPost.visibility === "private") {
+        throw new ForbiddenError(
+          "Private posts cannot be reposted"
+        );
+      }
 
-  // 6. If already reposted → remove repost
-  if (alreadyReposted) {
-    await Post.findByIdAndDelete(
-      alreadyReposted._id
-    );
+      const allowed = await canViewPost(
+        originalPost,
+        userId
+      );
 
-    await Post.findByIdAndUpdate(
-      originalPost._id,
-      {
-        $pull: {
-          reposts: {
+      if (!allowed) {
+        throw new ForbiddenError(
+          "You do not have permission to repost this post"
+        );
+      }
+
+      const existingReposts = await Post.find({
+        user: userId,
+        originalPost: originalPost._id,
+        isRepost: true,
+      })
+        .session(session)
+        .lean();
+
+      // --------------------------------------------------------
+      // REMOVE REPOST
+      // --------------------------------------------------------
+
+      if (existingReposts.length > 0) {
+        const repostIds = existingReposts.map(
+          (repost) => repost._id
+        );
+
+        // Preserve reports filed against these repost documents before
+        // removing them. The helper runs inside this transaction.
+        await snapshotReportsForPosts({
+          posts: existingReposts,
+          session,
+        });
+
+        await Comment.deleteMany({
+          post: { $in: repostIds },
+        }).session(session);
+
+        await User.updateMany(
+          {
+            savedPosts: { $in: repostIds },
+          },
+          {
+            $pull: {
+              savedPosts: {
+                $in: repostIds,
+              },
+            },
+          }
+        ).session(session);
+
+        await User.updateMany(
+          {
+            hiddenPosts: { $in: repostIds },
+          },
+          {
+            $pull: {
+              hiddenPosts: {
+                $in: repostIds,
+              },
+            },
+          }
+        ).session(session);
+
+        await Post.deleteMany({
+          _id: { $in: repostIds },
+          user: userId,
+          originalPost: originalPost._id,
+          isRepost: true,
+        }).session(session);
+
+        await Post.updateOne(
+          {
+            _id: originalPost._id,
+          },
+          {
+            $pull: {
+              reposts: {
+                user: userId,
+              },
+            },
+          },
+          { session }
+        );
+
+        const updatedOriginal = await Post.findById(
+          originalPost._id
+        )
+          .select("reposts")
+          .session(session);
+
+        if (!updatedOriginal) {
+          throw new NotFoundError("Original post not found");
+        }
+
+        result = {
+          reposted: false,
+          repostCount: updatedOriginal.reposts.length,
+        };
+
+        return;
+      }
+
+      // --------------------------------------------------------
+      // CREATE REPOST
+      // --------------------------------------------------------
+
+      // Normalize the original workout before copying it.
+      // This rejects malformed legacy workout data with a
+      // clear validation error instead of a Mongoose cast error.
+      const normalizedWorkout = normalizeWorkout(
+        originalPost.workout,
+        "originalPost.workout"
+      );
+
+      const [newRepost] = await Post.create(
+        [
+          {
             user: userId,
+            content: originalPost.content,
+            tags: originalPost.tags,
+            visibility: originalPost.visibility,
+            workout: normalizedWorkout,
+            media: originalPost.media || [],
+            isRepost: true,
+            originalPost: originalPost._id,
+            respects: [],
+            reposts: [],
+          },
+        ],
+        { session }
+      );
+
+      // Remove stale duplicate embedded entries first.
+      await Post.updateOne(
+        {
+          _id: originalPost._id,
+        },
+        {
+          $pull: {
+            reposts: {
+              user: userId,
+            },
           },
         },
-      }
-    );
+        { session }
+      );
 
-    return {
-      reposted: false,
-    };
-  }
-
-  // 7. Repost inherits original visibility
-  const repostVisibility =
-    originalPost.visibility;
-
-  // 8. Create repost
-  const newRepost = await Post.create({
-    user: userId,
-
-    content: originalPost.content,
-    tags: originalPost.tags,
-    visibility: repostVisibility,
-    workout: originalPost.workout,
-    media: originalPost.media || [],
-
-    isRepost: true,
-    originalPost: originalPost._id,
-
-    respects: [],
-    reposts: [],
-  });
-
-  // 9. Add repost to original post
-  await Post.findByIdAndUpdate(
-    originalPost._id,
-    {
-      $push: {
-        reposts: {
-          user: userId,
-          createdAt: newRepost.createdAt,
+      await Post.updateOne(
+        {
+          _id: originalPost._id,
         },
-      },
+        {
+          $push: {
+            reposts: {
+              user: userId,
+              createdAt: newRepost.createdAt,
+            },
+          },
+        },
+        { session }
+      );
+
+      const updatedOriginal = await Post.findById(
+        originalPost._id
+      )
+        .select("reposts")
+        .session(session);
+
+      if (!updatedOriginal) {
+        throw new NotFoundError("Original post not found");
+      }
+
+      createdRepostId = newRepost._id;
+
+      result = {
+        reposted: true,
+        repostCount: updatedOriginal.reposts.length,
+      };
+    });
+
+    // Populate after the transaction commits.
+    if (createdRepostId) {
+      const populatedRepost = await populatePostQuery(
+        Post.findById(createdRepostId)
+      );
+
+      if (!populatedRepost) {
+        throw new NotFoundError("Repost not found");
+      }
+
+      result.post = populatedRepost;
     }
-  );
 
-  // 10. Populate response
-  await newRepost.populate(
-    "user",
-    "name handle avatar"
-  );
-
-  await newRepost.populate("originalPost");
-
-  return {
-    reposted: true,
-    post: newRepost,
-  };
+    return result;
+  } finally {
+    await session.endSession();
+  }
 };
 
-// Service: Save Post
+// ============================================================
+// SAVE POST
+// ============================================================
+
 export const savePostService = async ({
   postId,
   userId,
   canViewPostWithOriginal,
 }) => {
-  // 1. Find the post
   const post = await Post.findById(postId);
 
   if (!post) {
-  throw new NotFoundError("Post not found");
-}
+    throw new NotFoundError("Post not found");
+  }
 
-  // 2. User must be able to view the post
   const allowed = await canViewPostWithOriginal(
     post,
     userId
@@ -1340,24 +1701,19 @@ export const savePostService = async ({
     );
   }
 
-  // 3. Find user
-  const user = await User.findById(userId);
-
-  if (!user) {
-  throw new NotFoundError("User not found");
-}
-
-  // 4. Check whether post is already saved
-  const alreadySaved = user.savedPosts.some(
-    (id) =>
-      id.toString() === postId.toString()
+  const result = await User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $addToSet: {
+        savedPosts: postId,
+      },
+    }
   );
 
-  // 5. Save only if not already saved
-  if (!alreadySaved) {
-    user.savedPosts.push(postId);
-
-    await user.save();
+  if (result.matchedCount === 0) {
+    throw new NotFoundError("User not found");
   }
 
   return {
@@ -1365,51 +1721,55 @@ export const savePostService = async ({
   };
 };
 
-// Service: Unsave Post
+// ============================================================
+// UNSAVE POST
+// ============================================================
+
 export const unsavePostService = async ({
   postId,
   userId,
 }) => {
-  // 1. Find user
-  const user = await User.findById(userId);
-
-  if (!user) {
-  throw new NotFoundError("User not found");
-}
-
-  // 2. Remove post from savedPosts
-  user.savedPosts = user.savedPosts.filter(
-    (id) =>
-      id.toString() !== postId.toString()
+  const result = await User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $pull: {
+        savedPosts: postId,
+      },
+    }
   );
 
-  await user.save();
+  if (result.matchedCount === 0) {
+    throw new NotFoundError("User not found");
+  }
 
   return {
     saved: false,
   };
 };
 
-// Service: Hide Post
+// ============================================================
+// HIDE POST
+// ============================================================
+
 export const hidePostService = async ({
   postId,
   userId,
 }) => {
-  const user = await User.findById(userId);
-
-  if (!user) {
-  throw new NotFoundError("User not found");
-}
-
-  const alreadyHidden = user.hiddenPosts.some(
-    (id) =>
-      id.toString() === postId.toString()
+  const result = await User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $addToSet: {
+        hiddenPosts: postId,
+      },
+    }
   );
 
-  if (!alreadyHidden) {
-    user.hiddenPosts.push(postId);
-
-    await user.save();
+  if (result.matchedCount === 0) {
+    throw new NotFoundError("User not found");
   }
 
   return {
@@ -1417,54 +1777,131 @@ export const hidePostService = async ({
   };
 };
 
-// Service: Unhide Post
+// ============================================================
+// UNHIDE POST
+// ============================================================
+
 export const unhidePostService = async ({
   postId,
   userId,
 }) => {
-  const user = await User.findById(userId);
-
- if (!user) {
-  throw new NotFoundError("User not found");
-}
-
-  user.hiddenPosts = user.hiddenPosts.filter(
-    (id) =>
-      id.toString() !== postId.toString()
+  const result = await User.updateOne(
+    {
+      _id: userId,
+    },
+    {
+      $pull: {
+        hiddenPosts: postId,
+      },
+    }
   );
 
-  await user.save();
+  if (result.matchedCount === 0) {
+    throw new NotFoundError("User not found");
+  }
 
   return {
     hidden: false,
   };
 };
 
+// ============================================================
+// REPORT POST
+// ============================================================
+
+
+
 export const reportPostService = async ({
   postId,
   userId,
   reason,
+  canViewPostWithOriginal,
 }) => {
   const post = await Post.findById(postId);
 
   if (!post) {
-  throw new NotFoundError("Post not found");
-}
+    throw new NotFoundError("Post not found");
+  }
 
-  const report = await Report.create({
+  if (typeof canViewPostWithOriginal !== "function") {
+    throw new Error(
+      "canViewPostWithOriginal must be provided"
+    );
+  }
+
+  const allowed = await canViewPostWithOriginal(
+    post,
+    userId
+  );
+
+  if (!allowed) {
+    throw new ForbiddenError(
+      "You do not have permission to report this post"
+    );
+  }
+
+  // Prevent the same user from reporting the same post twice.
+  const existingReport = await Report.findOne({
     post: postId,
     reporter: userId,
-    reason,
-    status: "pending",
-    createdAt: new Date(),
   });
 
-  return {
-    report,
-  };
+  if (existingReport) {
+    throw new ConflictError(
+      "You have already reported this post"
+    );
+  }
+
+  try {
+    // Fetch the original author's information for the snapshot.
+    const author = await User.findById(post.user)
+      .select("name handle")
+      .lean();
+
+    // Set snapshot expiration to 180 days after report creation.
+    const snapshotExpiresAt = new Date();
+    snapshotExpiresAt.setDate(
+      snapshotExpiresAt.getDate() + 180
+    );
+
+    const report = await Report.create({
+      post: postId,
+      originalPostId: post._id,
+      reporter: userId,
+      reason: reason.trim(),
+      status: "pending",
+
+      postSnapshot: {
+        authorId: post.user,
+        authorName: author?.name ?? "",
+        authorHandle: author?.handle ?? "",
+        content: post.content ?? "",
+        tags: post.tags ?? [],
+        visibility: post.visibility ?? null,
+        workout: post.workout ?? undefined,
+        deletedAt: null,
+      },
+
+      snapshotExpiresAt,
+    });
+
+    return { report };
+  } catch (error) {
+    // Handles simultaneous requests caught by the unique index.
+    if (error.code === 11000) {
+      throw new ConflictError(
+        "You have already reported this post"
+      );
+    }
+
+    throw error;
+  }
 };
 
-// Service: Track Share
+// ============================================================
+// TRACK SHARE
+// ============================================================
+
 export const trackShareService = async ({
   postId,
   userId,
@@ -1473,8 +1910,8 @@ export const trackShareService = async ({
   const post = await Post.findById(postId);
 
   if (!post) {
-  throw new NotFoundError("Post not found");
-}
+    throw new NotFoundError("Post not found");
+  }
 
   const allowed = await canViewPostWithOriginal(
     post,
@@ -1487,12 +1924,23 @@ export const trackShareService = async ({
     );
   }
 
-  post.shareCount =
-    (post.shareCount || 0) + 1;
+  const updatedPost = await Post.findByIdAndUpdate(
+    postId,
+    {
+      $inc: {
+        shareCount: 1,
+      },
+    },
+    {
+      new: true,
+    }
+  ).select("shareCount");
 
-  await post.save();
+  if (!updatedPost) {
+    throw new NotFoundError("Post not found");
+  }
 
   return {
-    shareCount: post.shareCount,
+    shareCount: updatedPost.shareCount,
   };
 };

@@ -1,18 +1,34 @@
 
-// In-memory presence tracker. Maps userId (string) -> Set of socket ids
-// currently open for that user, so a user with multiple tabs/devices open
-// is only ever broadcast as "online" once, and only goes "offline" once
-// every one of their connections has closed.
-//
-// LIMITATION: this Map lives in a single Node.js process's memory. If you
-// ever run more than one server instance behind a load balancer, each
-// instance will have its own partial view of who's online. At that point
-// you'd want a shared store (e.g. Redis + the socket.io-redis adapter) so
-// all instances agree on presence. Not needed for a single-instance setup.
+import User from "../models/User.js";
 
-import User from '../models/User.js';
+// In-memory presence tracker.
+// Maps userId (string) -> Set of socket IDs.
+const onlineUsers = new Map();
 
-const onlineUsers = new Map(); // userId -> Set<socketId>
+// Tracks asynchronous database operations so MongoDB is not
+// disconnected while a presence update is still running.
+const pendingPresenceOperations = new Set();
+
+let isShuttingDown = false;
+
+/**
+ * Track an asynchronous presence operation.
+ *
+ * The operation is registered immediately, before it starts,
+ * and removed when it resolves or rejects.
+ */
+function trackPresenceOperation(operation) {
+  const promise = Promise.resolve().then(operation);
+
+  pendingPresenceOperations.add(promise);
+
+  promise.then(
+    () => pendingPresenceOperations.delete(promise),
+    () => pendingPresenceOperations.delete(promise)
+  );
+
+  return promise;
+}
 
 export function getOnlineUserIds() {
   return Array.from(onlineUsers.keys());
@@ -20,126 +36,216 @@ export function getOnlineUserIds() {
 
 export function isUserOnline(userId) {
   return onlineUsers.has(userId?.toString());
-
 }
 
-// ── Boot-time cleanup ───────────────────────────────────────────────────
-// A fresh process starts with zero real socket connections, so any user
-// still marked isOnline:true in the DB is stale leftover from before a
-// restart/crash/redeploy. Clear it before accepting new connections.
+// Boot-time cleanup
 export async function resetPresenceOnBoot() {
   const result = await User.updateMany(
     { isOnline: true },
-    { $set: { isOnline: false, lastSeen: new Date() } }
+    {
+      $set: {
+        isOnline: false,
+        lastSeen: new Date(),
+      },
+    }
   );
+
   if (result.modifiedCount > 0) {
-    console.log(`Presence: reset ${result.modifiedCount} stale online users on boot`);
+    console.log(
+      `Presence: reset ${result.modifiedCount} stale online users on boot`
+    );
   }
 }
 
 export function registerPresenceHandlers(io) {
-  io.on('connection', async (socket) => {
-    const userId = socket.userId; // set by the io.use() auth middleware in server.js
+  // Connection handler
+  io.on("connection", async (socket) => {
+    // Reject connections once shutdown has started.
+    if (isShuttingDown) {
+      socket.disconnect(true);
+      return;
+    }
+
+    const userId = socket.userId;
+
     if (!userId) {
-      socket.disconnect();
+      socket.disconnect(true);
       return;
     }
 
     const isFirstConnectionForUser = !onlineUsers.has(userId);
+
     if (isFirstConnectionForUser) {
       onlineUsers.set(userId, new Set());
     }
+
     onlineUsers.get(userId).add(socket.id);
 
-    // Only flip DB state + broadcast on this user's FIRST active connection.
-    // A second tab/device for the same user shouldn't re-announce "online".
     if (isFirstConnectionForUser) {
       try {
-        await User.findByIdAndUpdate(userId, { isOnline: true, last_active_at: new Date() });
+        await trackPresenceOperation(() =>
+          User.findByIdAndUpdate(userId, {
+            isOnline: true,
+            last_active_at: new Date(),
+          })
+        );
       } catch (err) {
-        console.error('Presence: failed to mark user online:', err.message);
+        console.error(
+          "Presence: failed to mark user online:",
+          err.message
+        );
       }
-      io.emit('presence:online', { userId });
+
+      io.emit("presence:online", { userId });
     }
 
-    // Tell the newly-connected client who's already online, so it doesn't
-    // have to wait for individual presence:online events to build the list.
-    socket.emit('presence:snapshot', { onlineUserIds: getOnlineUserIds() });
+    socket.emit("presence:snapshot", {
+      onlineUserIds: getOnlineUserIds(),
+    });
 
-    // ── Heartbeat ──────────────────────────────────────────────────────
-    // Client sends this every ~30s while the app is in the foreground.
-    // Updates last_active_at so other users can compute "Active X ago"
-    // even after the user goes offline. Persisted to the DB so it survives
-    // reloads / server restarts.
-    socket.on('presence:heartbeat', async () => {
+    // Heartbeat: client sends approximately every 30 seconds.
+    socket.on("presence:heartbeat", async () => {
+      if (isShuttingDown) return;
+
       const now = new Date();
+
       try {
-        await User.findByIdAndUpdate(userId, { last_active_at: now });
-        // Broadcast to everyone so live "Active now" indicators update.
-        io.emit('presence:active', { userId, lastActiveAt: now.toISOString() });
+        await trackPresenceOperation(() =>
+          User.findByIdAndUpdate(userId, {
+            last_active_at: now,
+          })
+        );
+
+        io.emit("presence:active", {
+          userId,
+          lastActiveAt: now.toISOString(),
+        });
       } catch (err) {
-        console.error('Presence: failed to update last_active_at:', err.message);
+        console.error(
+          "Presence: failed to update last_active_at:",
+          err.message
+        );
       }
     });
 
-    socket.on('disconnect', async () => {
+    // Disconnect handler
+    socket.on("disconnect", async () => {
       const sockets = onlineUsers.get(userId);
+
       if (!sockets) return;
 
       sockets.delete(socket.id);
 
-      // Still has other open tabs/devices — stay online, no broadcast.
+      // Keep the user online if another tab/device is connected.
       if (sockets.size > 0) return;
 
       onlineUsers.delete(userId);
+
       const lastSeen = new Date();
+
       try {
-        await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen, last_active_at: lastSeen });
+        // This operation must be allowed to finish during shutdown.
+        await trackPresenceOperation(() =>
+          User.findByIdAndUpdate(userId, {
+            isOnline: false,
+            lastSeen,
+            last_active_at: lastSeen,
+          })
+        );
       } catch (err) {
-        console.error('Presence: failed to mark user offline:', err.message);
+        console.error(
+          "Presence: failed to mark user offline:",
+          err.message
+        );
       }
-      io.emit('presence:offline', { userId, lastSeen });
+
+      io.emit("presence:offline", {
+        userId,
+        lastSeen,
+      });
     });
   });
 
-  // ── Reconciliation safety net ──────────────────────────────────────────
-  // Belt-and-braces against any path where a socket stops being truly
-  // connected without its 'disconnect' handler ever firing (e.g. an
-  // uncaught error mid-handler, a missed edge case in the transport layer).
-  // Every 30s, verify every tracked socket id is still actually known to
-  // socket.io; drop anything that isn't, and flip the user offline if that
-  // was their last tracked connection. This makes presence self-correcting
-  // instead of permanently trusting a single event to always fire.
+  // Reconciliation safety net: every 30 seconds.
   const RECONCILE_INTERVAL_MS = 30_000;
 
   const reconcileTimer = setInterval(async () => {
+    if (isShuttingDown) return;
+
     for (const [userId, socketIds] of onlineUsers.entries()) {
+      if (isShuttingDown) return;
+
       let changed = false;
 
       for (const socketId of socketIds) {
         const stillConnected = io.sockets.sockets.has(socketId);
+
         if (!stillConnected) {
           socketIds.delete(socketId);
           changed = true;
         }
       }
 
-      if (!changed) continue;
+      if (!changed || socketIds.size > 0) continue;
 
-      if (socketIds.size === 0) {
-        onlineUsers.delete(userId);
-        const lastSeen = new Date();
-        try {
-          await User.findByIdAndUpdate(userId, { isOnline: false, lastSeen, last_active_at: lastSeen });
-        } catch (err) {
-          console.error('Presence reconcile: failed to mark user offline:', err.message);
-        }
-        io.emit('presence:offline', { userId, lastSeen });
-        console.log(`Presence reconcile: cleared stale online status for user ${userId}`);
+      onlineUsers.delete(userId);
+
+      const lastSeen = new Date();
+
+      try {
+        await trackPresenceOperation(() =>
+          User.findByIdAndUpdate(userId, {
+            isOnline: false,
+            lastSeen,
+            last_active_at: lastSeen,
+          })
+        );
+      } catch (err) {
+        console.error(
+          "Presence reconcile: failed to mark user offline:",
+          err.message
+        );
       }
+
+      io.emit("presence:offline", {
+        userId,
+        lastSeen,
+      });
+
+      console.log(
+        `Presence reconcile: cleared stale online status for user ${userId}`
+      );
     }
   }, RECONCILE_INTERVAL_MS);
 
-  // Let Node exit cleanly in tests/scripts that don't run forever.
   reconcileTimer.unref?.();
+
+  /**
+   * Shutdown lifecycle controller.
+   */
+  return {
+    /**
+     * Stop new presence activity and reconciliation.
+     * Existing disconnect handlers are still allowed to update MongoDB.
+     */
+    beginShutdown() {
+      if (isShuttingDown) return;
+
+      isShuttingDown = true;
+      clearInterval(reconcileTimer);
+
+      console.log("Presence: shutdown started; reconciliation stopped.");
+    },
+
+    /**
+     * Wait until all tracked presence database operations finish.
+     */
+    async waitForPendingOperations() {
+      while (pendingPresenceOperations.size > 0) {
+        const operations = Array.from(pendingPresenceOperations);
+
+        await Promise.allSettled(operations);
+      }
+    },
+  };
 }

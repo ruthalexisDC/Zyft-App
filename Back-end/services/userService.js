@@ -5,6 +5,9 @@ import Workout from "../models/Workout.js";
 import cloudinary from "../utils/cloudinary.js";
 import crypto from "crypto";
 import transporter from "../config/email.js";
+import mongoose from "mongoose";
+import Notification from "../models/Notification.js";
+import Report from "../models/Report.js";
 import {
   BadRequestError,
   NotFoundError,
@@ -51,10 +54,10 @@ const canViewPost = async (post, viewerId) => {
       return false;
     }
 
-    return owner.followers.some(
-      (followerId) =>
-        followerId.toString() === viewerIdString
-    );
+   return (owner.followers || []).some(
+  (followerId) =>
+    followerId.toString() === viewerIdString
+);
   }
 
   return false;
@@ -171,21 +174,32 @@ export const getUserPostsById = async (
   let databaseSkip = 0;
   let visiblePosts = [];
 
-  const targetVisiblePosts = skip + limit;
+  const targetVisiblePosts = skip + limit + 1;
 
   while (visiblePosts.length < targetVisiblePosts) {
     const posts = await Post.find({
-      user: userId,
-    })
-      .sort({ createdAt: -1 })
-      .skip(databaseSkip)
-      .limit(BATCH_SIZE)
-      .populate(
-        "user",
-        "name handle avatar last_active_at isOnline show_active_status"
-      )
-      .populate("originalPost")
-      .lean();
+  user: userId,
+})
+  .sort({ createdAt: -1 })
+  .skip(databaseSkip)
+  .limit(BATCH_SIZE)
+  .populate(
+    "user",
+    "name handle avatar last_active_at isOnline show_active_status"
+  )
+  .populate({
+    path: "originalPost",
+    populate: [
+      {
+        path: "user",
+        select: "name handle avatar",
+      },
+      {
+        path: "workout",
+      },
+    ],
+  })
+  .lean();
 
     if (posts.length === 0) {
       break;
@@ -222,9 +236,15 @@ export const getUserPostsById = async (
   // BATCH COMMENT COUNTS
   // ─────────────────────────────────────
 
-  const postIds = pagePosts.map(
-    (post) => post._id
-  );
+  const postIds = pagePosts.flatMap((post) => {
+  const ids = [post._id];
+
+  if (post.originalPost?._id) {
+    ids.push(post.originalPost._id);
+  }
+
+  return ids;
+});
 
   const commentCounts = postIds.length
     ? await Comment.aggregate([
@@ -253,24 +273,47 @@ export const getUserPostsById = async (
     ])
   );
 
-  const postsWithData = pagePosts.map((post) => ({
+  const postsWithData = pagePosts.map((post) => {
+  const getEngagementData = (targetPost) => {
+    if (!targetPost) return null;
+
+    const targetId = targetPost._id.toString();
+
+    return {
+      respectCount: targetPost.respects?.length || 0,
+
+      repostCount: targetPost.reposts?.length || 0,
+
+      commentCount: commentCountMap.get(targetId) || 0,
+
+      didRespect: Boolean(
+        currentUserId &&
+        targetPost.respects?.some(
+          (id) => id.toString() === currentUserId.toString()
+        )
+      ),
+    };
+  };
+
+  // Engagement data for the profile post or repost record
+  const postEngagement = getEngagementData(post);
+
+  // Engagement data for the original post
+  const originalPost =
+    post.originalPost &&
+    typeof post.originalPost === "object"
+      ? {
+          ...post.originalPost,
+          ...getEngagementData(post.originalPost),
+        }
+      : post.originalPost;
+
+  return {
     ...post,
-
-    respectCount:
-      post.respects?.length || 0,
-
-    commentCount:
-      commentCountMap.get(
-        post._id.toString()
-      ) || 0,
-
-    didRespect:
-      post.respects?.some(
-        (r) =>
-          r.toString() ===
-          currentUserId.toString()
-      ) || false,
-  }));
+    ...postEngagement,
+    originalPost,
+  };
+});
 
   const hasMore =
     visiblePosts.length > skip + limit;
@@ -395,25 +438,358 @@ export const uploadUserAvatar = async (userId, fileBuffer) => {
 
 // Service: Delete user account
 export const deleteUserAccountService = async (userId) => {
-  const user = await User.findById(userId);
+  const session = await mongoose.startSession();
 
-  if (!user) {
-    throw new NotFoundError("User not found");
+  try {
+    await session.withTransaction(async () => {
+      const user = await User.findById(userId).session(session);
+
+      if (!user) {
+        throw new NotFoundError("User not found");
+      }
+
+      // Find posts owned by the account being deleted.
+// Collect posts owned by the user.
+const ownedPosts = await Post.find({ user: userId })
+  .select("_id")
+  .session(session)
+  .lean();
+
+const deletedPostIds = new Set(
+  ownedPosts.map((post) => post._id.toString())
+);
+
+// Recursively discover dependent reposts.
+let frontier = ownedPosts.map((post) => post._id);
+
+while (frontier.length > 0) {
+  const reposts = await Post.find({
+    isRepost: true,
+    originalPost: { $in: frontier },
+  })
+    .select("_id")
+    .session(session)
+    .lean();
+
+  const nextFrontier = [];
+
+  for (const repost of reposts) {
+    const id = repost._id.toString();
+
+    if (!deletedPostIds.has(id)) {
+      deletedPostIds.add(id);
+      nextFrontier.push(repost._id);
+    }
   }
 
-  await Post.deleteMany({
+  frontier = nextFrontier;
+}
+
+// Convert the collected IDs back to ObjectIds.
+const postIdsToDelete = [...deletedPostIds].map(
+  (id) => new mongoose.Types.ObjectId(id)
+);
+
+// Find comments on posts being deleted,
+// plus comments authored by the deleted user.
+const commentsToDelete = await Comment.find({
+  $or: [
+    { post: { $in: postIdsToDelete } },
+    { user: userId },
+  ],
+})
+  .select("_id post parentComment")
+  .session(session)
+  .lean();
+
+const commentIdsToDelete = commentsToDelete.map(
+  (comment) => comment._id
+);
+// Find replies that reference comments being deleted,
+// but are not themselves scheduled for deletion.
+const repliesToDetach = await Comment.find({
+  parentComment: { $in: commentIdsToDelete },
+  _id: { $nin: commentIdsToDelete },
+})
+  .select("_id parentComment")
+  .session(session)
+  .lean();
+
+const replyIdsToDetach = repliesToDetach.map(
+  (reply) => reply._id
+);
+// Detach surviving replies from comments being deleted.
+if (replyIdsToDetach.length > 0) {
+  await Comment.updateMany(
+    {
+      _id: { $in: replyIdsToDetach },
+    },
+    {
+      $set: { parentComment: null },
+    },
+    { session }
+  );
+}
+// Remove the deleted user's reactions from surviving comments.
+await Comment.updateMany(
+  {
+    _id: { $nin: commentIdsToDelete },
+    "reactions.user": userId,
+  },
+  {
+    $pull: {
+      reactions: { user: userId },
+    },
+  },
+  { session }
+);
+
+
+// Delete comments authored by the deleted user
+// and comments belonging to posts being deleted.
+if (commentIdsToDelete.length > 0) {
+  await Comment.deleteMany(
+    {
+      _id: { $in: commentIdsToDelete },
+    },
+    { session }
+  );
+}
+
+await Post.updateMany(
+  {
+    _id: { $nin: postIdsToDelete },
+    $or: [
+      { respects: userId },
+      { "reposts.user": userId },
+    ],
+  },
+  {
+    $pull: {
+      respects: userId,
+      reposts: { user: userId },
+    },
+  },
+  { session }
+);
+// Delete posts owned by the account
+// and all recursively discovered dependent reposts.
+if (postIdsToDelete.length > 0) {
+  await Post.deleteMany(
+    {
+      _id: { $in: postIdsToDelete },
+    },
+    { session }
+  );
+}
+await Workout.updateMany(
+  {
+    user: { $ne: userId },
+    "comments.likes": userId,
+  },
+  {
+    $pull: {
+      "comments.$[].likes": userId,
+    },
+  },
+  { session }
+);
+// Delete all workouts owned by the account.
+await Workout.deleteMany(
+  {
     user: userId,
-  });
+  },
+  { session }
+);
+// Delete the user account document.
+const deletedUser = await User.findByIdAndDelete(
+  userId,
+  { session }
+);
 
-  await Workout.deleteMany({
-    user: userId,
-  });
+if (!deletedUser) {
+  throw new NotFoundError("User not found");
+}
 
-  await User.findByIdAndDelete(userId);
+await Report.updateMany(
+  {
+    post: { $in: postIdsToDelete },
+  },
+  {
+    $set: {
+      post: null,
+    },
+  },
+  { session }
+);
+// Identify notifications affected by account deletion.
+const notificationsToDelete = await Notification.find({
+  $or: [
+    { recipient: userId },
+    { sender: userId },
+    { followBackUserId: userId },
+    { workout: { $in: postIdsToDelete } },
+    { commentId: { $in: commentIdsToDelete } },
+  ],
+})
+  .select("_id")
+  .session(session)
+  .lean();
 
-  return true;
+const notificationIdsToDelete = notificationsToDelete.map(
+  (notification) => notification._id
+);
+
+// Delete notifications affected by account deletion.
+if (notificationIdsToDelete.length > 0) {
+  await Notification.deleteMany(
+    {
+      _id: { $in: notificationIdsToDelete },
+    },
+    { session }
+  );
+}
+// Preserve moderation reports while removing
+// the deleted user's identity.
+await Report.updateMany(
+  {
+    reporter: userId,
+  },
+  {
+    $set: {
+      reporter: null,
+    },
+  },
+  { session }
+);
+// Preserve moderation reports while removing references
+// to posts and dependent reposts being deleted.
+if (postIdsToDelete.length > 0) {
+  await Report.updateMany(
+    {
+      post: { $in: postIdsToDelete },
+    },
+    {
+      $set: {
+        post: null,
+      },
+    },
+    { session }
+  );
+}
+// Remove the deleted user from other users'
+// followers and following arrays.
+await User.updateMany(
+  {
+    $or: [
+      { followers: userId },
+      { following: userId },
+    ],
+  },
+  {
+    $pull: {
+      followers: userId,
+      following: userId,
+    },
+  },
+  { session }
+);
+// Remove references to deleted posts and reposts
+// from other users' saved and hidden post lists.
+if (postIdsToDelete.length > 0) {
+  await User.updateMany(
+    {
+      $or: [
+        { savedPosts: { $in: postIdsToDelete } },
+        { hiddenPosts: { $in: postIdsToDelete } },
+      ],
+    },
+    {
+      $pull: {
+        savedPosts: { $in: postIdsToDelete },
+        hiddenPosts: { $in: postIdsToDelete },
+      },
+    },
+    { session }
+  );
+}
+// Remove the deleted user's interactions
+// from posts that will remain in the database.
+await Post.updateMany(
+  {
+    _id: { $nin: postIdsToDelete },
+    $or: [
+      { respects: userId },
+      { "reposts.user": userId },
+    ],
+  },
+  {
+    $pull: {
+      respects: userId,
+      reposts: { user: userId },
+    },
+  },
+  { session }
+);
+// Remove the deleted user's respects
+// from workouts belonging to other users.
+await Workout.updateMany(
+  {
+    user: { $ne: userId },
+    respects: userId,
+  },
+  {
+    $pull: {
+      respects: userId,
+    },
+  },
+  { session }
+);
+// Remove embedded comments authored by the deleted user
+// from workouts that will remain in the database.
+await Workout.updateMany(
+  {
+    user: { $ne: userId },
+    "comments.user": userId,
+  },
+  {
+    $pull: {
+      comments: { user: userId },
+    },
+  },
+  { session }
+);
+// Remove the deleted user's likes from embedded
+// comments that belong to surviving workouts.
+await Workout.updateMany(
+  {
+    user: { $ne: userId },
+    "comments.likes": userId,
+  },
+  {
+    $pull: {
+      "comments.$[].likes": userId,
+    },
+  },
+  { session }
+);
+// Temporary placeholder until deletion is implemented.
+void notificationIdsToDelete;
+    void postIdsToDelete;
+    void commentIdsToDelete;
+    void replyIdsToDetach;
+         // Temporary safeguard:
+      // Abort the transaction until all cleanup is implemented.
+      throw new Error(
+        "Account deletion is temporarily disabled while cleanup is being implemented"
+      );
+    });
+
+    return true;
+  } finally {
+    await session.endSession();
+  }
 };
-
 // Service: Request email verification
 export const requestEmailVerificationService = async (userId) => {
   const user = await User.findById(userId);

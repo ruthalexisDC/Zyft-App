@@ -382,14 +382,24 @@ export default function Activity() {
   // useEffect(() => {
   //   fetchNotifications();
   // }, [fetchNotifications]);
+
   useEffect(() => {
     let cancelled = false;
 
     const loadNotifications = async () => {
       try {
-        const data = await getNotification();
+        const response = await getNotification();
 
-        console.log("NOTIFICATIONS:", data);
+        console.log("NOTIFICATIONS RESPONSE:", response);
+
+        // Support either a direct array or a wrapped API response.
+        const data = Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response?.data?.data)
+              ? response.data.data
+              : [];
 
         if (cancelled) return;
 
@@ -400,11 +410,9 @@ export default function Activity() {
 
           data.forEach((n) => {
             if (n.type === "follow" && n.user?.id && !(n.user.id in next)) {
-              next[n.user.id] = !!n.user.isFollowing;
+              next[n.user.id] = Boolean(n.user.isFollowing);
             }
           });
-
-          console.log("FOLLOWING MAP:", next);
 
           return next;
         });
@@ -427,37 +435,64 @@ export default function Activity() {
     };
   }, [t]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  // Count unread notifications across all tabs.
+  const unreadCount = useMemo(
+    () => notifications.filter((notification) => !notification.read).length,
+    [notifications],
+  );
 
+  // Mark all notifications as read.
   const markAllRead = useCallback(async () => {
     try {
       await markAllNotificationAsRead();
 
-      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setNotifications((prev) =>
+        prev.map((notification) => ({
+          ...notification,
+          read: true,
+        })),
+      );
     } catch (err) {
-      console.error("Failed to mark all read:", err);
+      console.error("Failed to mark all notifications as read:", err);
+      setError(
+        t("errors.updateFailed", {
+          defaultValue: "Failed to update notifications. Please try again.",
+        }),
+      );
     }
-  }, []);
+  }, [t]);
 
+  // Mark a single notification as read.
   const markRead = useCallback(async (id) => {
+    if (!id) return;
+
     try {
       await markNotificationAsRead(id);
 
       setNotifications((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+        prev.map((notification) =>
+          notification.id === id
+            ? { ...notification, read: true }
+            : notification,
+        ),
       );
     } catch (err) {
-      console.error("Failed to mark read:", err);
+      console.error("Failed to mark notification as read:", err);
     }
   }, []);
 
+  // Dismiss a notification.
   const dismiss = useCallback(async (id) => {
+    if (!id) return;
+
     try {
       await deleteNotification(id);
 
-      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setNotifications((prev) =>
+        prev.filter((notification) => notification.id !== id),
+      );
     } catch (err) {
-      console.error("Failed to dismiss:", err);
+      console.error("Failed to dismiss notification:", err);
     }
   }, []);
 

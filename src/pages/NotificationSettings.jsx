@@ -66,7 +66,15 @@ export default function NotificationSettings() {
   useEffect(() => {
     api
       .get("/users/notification-preferences")
-      .then((res) => setPreferences(res.data.preferences))
+      .then((res) =>
+        setPreferences(
+          res.data?.data?.preferences ?? {
+            respect: true,
+            comment: true,
+            follow: true,
+          },
+        ),
+      )
       .catch((err) => {
         console.error("Failed to load notification preferences:", err);
         setError("Couldn't load your preferences.");
@@ -83,7 +91,7 @@ export default function NotificationSettings() {
       const { data } = await api.patch("/users/notification-preferences", {
         [key]: next,
       });
-      setPreferences(data.preferences);
+      setPreferences(data.data.preferences);
     } catch (err) {
       console.error("Failed to update notification preference:", err);
       setPreferences((prev) => ({ ...prev, [key]: !next })); // revert

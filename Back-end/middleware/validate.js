@@ -3,9 +3,9 @@ import { sendError } from "../utils/apiResponse.js";
 export const validate = (schema) => {
   return (req, res, next) => {
     const result = schema.safeParse({
-      body: req.body,
-      params: req.params,
-      query: req.query,
+      body: req.body ?? {},
+      params: req.params ?? {},
+      query: req.query ?? {},
     });
 
     if (!result.success) {
@@ -14,15 +14,15 @@ export const validate = (schema) => {
         message: issue.message,
       }));
 
+      console.error("Validation errors:", errors);
+
       return sendError(res, {
-      statusCode: 400,
-      message: "Validation failed",
-      errors,
-});
+        statusCode: 400,
+        message: "Validation failed",
+        errors,
+      });
     }
 
-    // Store validated data separately.
-    // Do not overwrite req.body, req.params, or req.query.
     req.validated = result.data;
 
     next();

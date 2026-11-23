@@ -1,16 +1,10 @@
-
-import { asyncHandler } from '../utils/asyncHandler.js';
-import { sendSuccess } from '../utils/apiResponse.js';
-import {
-  BadRequestError,
-  UnauthorizedError,
-} from '../errors/ApiError.js';
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { sendSuccess } from "../utils/apiResponse.js";
 import User from "../models/User.js";
-import { REACTION_EMOJIS } from '../models/Comments.js';
+import Post from "../models/Post.js";
 
-
-//Service 
- import {
+// Services
+import {
   createPostService,
   getFeedService,
   getPostService,
@@ -25,7 +19,7 @@ import { REACTION_EMOJIS } from '../models/Comments.js';
   updateCommentService,
   reactToCommentService,
   repostService,
-   getSavedPostsService,
+  getSavedPostsService,
   savePostService,
   unsavePostService,
   hidePostService,
@@ -33,6 +27,10 @@ import { REACTION_EMOJIS } from '../models/Comments.js';
   reportPostService,
   trackShareService,
 } from "../services/postService.js";
+
+// ─────────────────────────────────────────
+// POST VISIBILITY
+// ─────────────────────────────────────────
 
 const canViewPost = async (post, viewerId) => {
   if (!post || !viewerId) {
@@ -67,7 +65,7 @@ const canViewPost = async (post, viewerId) => {
     return false;
   }
 
-  // Followers-only → viewer must follow ORIGINAL author
+  // Followers-only → viewer must follow original author
   if (post.visibility === "followers") {
     const postOwner = await User.findById(postOwnerId)
       .select("followers");
@@ -83,15 +81,19 @@ const canViewPost = async (post, viewerId) => {
   }
 
   return false;
-
 };
 
+// ─────────────────────────────────────────
+// POST VISIBILITY + ORIGINAL POST
+// ─────────────────────────────────────────
+
+
 const canViewPostWithOriginal = async (post, viewerId) => {
-  if (!post) {
+  if (!post || !viewerId) {
     return false;
   }
 
-  // First check the repost itself
+  // Check whether the viewer can access the requested post.
   const canViewRequestedPost = await canViewPost(
     post,
     viewerId
@@ -101,47 +103,54 @@ const canViewPostWithOriginal = async (post, viewerId) => {
     return false;
   }
 
-  // Normal post
+  // A normal post does not require an additional check.
   if (!post.isRepost) {
     return true;
   }
 
-  // A repost must have an original
-  if (!post.originalPost) {
+  // A repost must reference an original post.
+  const originalPostId =
+    post.originalPost?._id ?? post.originalPost;
+
+  if (!originalPostId) {
     return false;
   }
 
-  // IMPORTANT:
-  // The viewer must also be allowed to see
-  // the ORIGINAL post.
-  return canViewPost(
-    post.originalPost,
-    viewerId
-  );
+  // Use the populated original when available.
+  // Otherwise, fetch the original document from MongoDB.
+  const originalPost =
+    post.originalPost?.visibility != null
+      ? post.originalPost
+      : await Post.findById(originalPostId);
+
+  if (!originalPost) {
+    return false;
+  }
+
+  // The viewer must be allowed to see the original too.
+  return canViewPost(originalPost, viewerId);
 };
+
 // ─────────────────────────────────────────
-// REFACTORED: CREATE POST
+// CREATE POST
 // ─────────────────────────────────────────
-  export const createPost = asyncHandler(async (req, res) => {
-  const { content, workout, media, visibility } = req.body;
+
+export const createPost = asyncHandler(async (req, res) => {
+  const {
+    content,
+    workout,
+    media,
+    visibility,
+  } = req.validated.body;
+
   const userId = req.user._id;
-
-  if (!userId) {
-    throw new UnauthorizedError("Authentication required");
-  }
-
-  if (!content && !workout && !media) {
-    throw new BadRequestError(
-      "Post must contain content, workout, or media"
-    );
-  }
 
   const post = await createPostService({
     userId,
     content,
     workout,
     media,
-    visibility, 
+    visibility,
   });
 
   return sendSuccess(res, {
@@ -154,29 +163,16 @@ const canViewPostWithOriginal = async (post, viewerId) => {
 // ─────────────────────────────────────────
 // GET FEED
 // ─────────────────────────────────────────
+
+
 export const getFeed = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-
-  const {
-    page = 1,
-    limit = 10,
-    type = "community",
-  } = req.query;
-
-  const pageNumber = Math.max(
-    parseInt(page) || 1,
-    1
-  );
-
-  const limitNumber = Math.min(
-    Math.max(parseInt(limit) || 10, 1),
-    50
-  );
+  const { page, limit, type } = req.validated.query;
 
   const result = await getFeedService({
     userId,
-    pageNumber,
-    limitNumber,
+    pageNumber: page,
+    limitNumber: limit,
     type,
     canViewPostWithOriginal,
   });
@@ -186,14 +182,16 @@ export const getFeed = asyncHandler(async (req, res) => {
       posts: result.posts,
       pagination: result.pagination,
     },
+    pagination: result.pagination,
   });
 });
 
 // ─────────────────────────────────────────
 // GET SINGLE POST
 // ─────────────────────────────────────────
+
 export const getPost = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
+  const { postId } = req.validated.params;
   const userId = req.user._id;
 
   const result = await getPostService({
@@ -210,31 +208,18 @@ export const getPost = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // GET USER'S POSTS
 // ─────────────────────────────────────────
+
+
 export const getUserPosts = asyncHandler(async (req, res) => {
-  const { userId } = req.params;
-
-  const {
-    page = 1,
-    limit = 10,
-  } = req.query;
-
+  const { userId } = req.validated.params;
+  const { page, limit } = req.validated.query;
   const currentUserId = req.user._id;
-
-  const pageNumber = Math.max(
-    parseInt(page) || 1,
-    1
-  );
-
-  const limitNumber = Math.min(
-    Math.max(parseInt(limit) || 10, 1),
-    50
-  );
 
   const result = await getUserPostsService({
     userId,
     currentUserId,
-    pageNumber,
-    limitNumber,
+    pageNumber: page,
+    limitNumber: limit,
     canViewPostWithOriginal,
   });
 
@@ -244,26 +229,19 @@ export const getUserPosts = asyncHandler(async (req, res) => {
   });
 });
 
+
 // ─────────────────────────────────────────
 // UPDATE POST
 // ─────────────────────────────────────────
-  export const updatePost = asyncHandler(async (req, res) => {
-  const EDITABLE_FIELDS = [
-    "content",
-    "media",
-    "visibility",
-  ];
 
-  const updates = {};
+export const updatePost = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
+  const updates = req.validated.body;
 
-  for (const field of EDITABLE_FIELDS) {
-    if (req.body[field] !== undefined) {
-      updates[field] = req.body[field];
-    }
-  }
+
 
   const updatedPost = await updatePostService({
-    postId: req.params.postId,
+    postId,
     userId: req.user._id,
     updates,
   });
@@ -272,11 +250,13 @@ export const getUserPosts = asyncHandler(async (req, res) => {
     data: updatedPost,
   });
 });
+
 // ─────────────────────────────────────────
 // DELETE POST
 // ─────────────────────────────────────────
+
 export const deletePost = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
+  const { postId } = req.validated.params;
 
   await deletePostService({
     postId,
@@ -287,11 +267,11 @@ export const deletePost = asyncHandler(async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// GIVE RESPECT (like)
+// GIVE RESPECT
 // ─────────────────────────────────────────
-// Service: Give / Remove Respect
-  export const giveRespect = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
+
+export const giveRespect = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
 
   const result = await giveRespectService({
     postId,
@@ -299,17 +279,17 @@ export const deletePost = asyncHandler(async (req, res) => {
     canViewPostWithOriginal,
   });
 
-
-
   return sendSuccess(res, {
     data: result,
   });
 });
+
 // ─────────────────────────────────────────
-// GET RESPECTS (who liked this post)
+// GET RESPECTS
 // ─────────────────────────────────────────
+
 export const getRespects = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
+  const { postId } = req.validated.params;
 
   const users = await getRespectsService({
     postId,
@@ -321,57 +301,45 @@ export const getRespects = asyncHandler(async (req, res) => {
     data: users,
   });
 });
+
 // ─────────────────────────────────────────
 // ADD COMMENT
 // ─────────────────────────────────────────
+
 export const addComment = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
-  const { content, parentComment } = req.body;
+  const { postId } = req.validated.params;
 
-  const userId = req.user._id;
-
-  if (
-    !content ||
-    content.trim().length === 0
-  ) {
-    throw new BadRequestError(
-      "Comment content is required",
-      [
-        {
-          field: "content",
-          message: "Comment content is required",
-        },
-      ]
-    );
-  }
+  const {
+    content,
+    parentComment,
+  } = req.validated.body;
 
   const comment = await addCommentService({
     postId,
-    userId,
+    userId: req.user._id,
     content,
     parentComment,
     canViewPostWithOriginal,
   });
-
 
   return sendSuccess(res, {
     statusCode: 201,
     data: comment,
   });
 });
+
 // ─────────────────────────────────────────
 // GET COMMENTS
 // ─────────────────────────────────────────
+
 export const getComments = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
+  const { postId } = req.validated.params;
 
   const comments = await getCommentsService({
-  postId,
-  userId: req.user._id,
-  canViewPostWithOriginal,
-});
-
-
+    postId,
+    userId: req.user._id,
+    canViewPostWithOriginal,
+  });
 
   return sendSuccess(res, {
     data: comments,
@@ -381,10 +349,12 @@ export const getComments = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // DELETE COMMENT
 // ─────────────────────────────────────────
+
 export const deleteComment = asyncHandler(async (req, res) => {
-  const { commentId } = req.params;
+  const { postId, commentId } = req.validated.params;
 
   await deleteCommentService({
+    postId,
     commentId,
     userId: req.user._id,
   });
@@ -395,34 +365,17 @@ export const deleteComment = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // UPDATE COMMENT
 // ─────────────────────────────────────────
+
 export const updateComment = asyncHandler(async (req, res) => {
-  const { commentId } = req.params;
-  const { content } = req.body;
+  const { postId, commentId } = req.validated.params;
+  const { content } = req.validated.body;
 
-  const userId = req.user._id;
-
-  if (
-    !content ||
-    content.trim().length === 0
-  ) {
-    throw new BadRequestError(
-      "Comment content is required",
-      [
-        {
-          field: "content",
-          message: "Comment content is required",
-        },
-      ]
-    );
-  }
-
-  const comment =
-    await updateCommentService({
-      commentId,
-      userId,
-      content,
-    });
-
+  const comment = await updateCommentService({
+    postId,
+    commentId,
+    userId: req.user._id,
+    content,
+  });
 
   return sendSuccess(res, {
     data: comment,
@@ -432,18 +385,15 @@ export const updateComment = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // REACT TO COMMENT
 // ─────────────────────────────────────────
-export const reactToComment = asyncHandler(async (req, res) => {
-  const { commentId } = req.params;
-  const { emoji } = req.body;
-  const userId = req.user._id;
 
-  if (!REACTION_EMOJIS.includes(emoji)) {
-    throw new BadRequestError("Invalid reaction emoji");
-  }
+export const reactToComment = asyncHandler(async (req, res) => {
+  const { postId, commentId } = req.validated.params;
+  const { emoji } = req.validated.body;
 
   const result = await reactToCommentService({
+    postId,
     commentId,
-    userId,
+    userId: req.user._id,
     emoji,
     canViewPostWithOriginal,
   });
@@ -459,21 +409,22 @@ export const reactToComment = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // REPOST
 // ─────────────────────────────────────────
+
+
 export const repost = asyncHandler(async (req, res) => {
-  const { postId } = req.params;
-  const userId = req.user._id;
+  const { postId } = req.validated.params;
 
   const result = await repostService({
     postId,
-    userId,
+    userId: req.user._id,
     canViewPost,
   });
-
 
   return sendSuccess(res, {
     statusCode: result.reposted ? 201 : 200,
     data: {
       reposted: result.reposted,
+      repostCount: result.repostCount,
       ...(result.post && {
         post: result.post,
       }),
@@ -481,49 +432,40 @@ export const repost = asyncHandler(async (req, res) => {
   });
 });
 
-  // Get Saved Posts
-export const getSavedPosts = asyncHandler(
-  async (req, res) => {
-    const userId = req.user._id;
-
-    const pageNumber = Math.max(
-      parseInt(req.query.page, 10) || 1,
-      1
-    );
-
-    const limitNumber = Math.min(
-      Math.max(
-        parseInt(req.query.limit, 10) || 20,
-        1
-      ),
-      50
-    );
-
-    const result =
-      await getSavedPostsService({
-        userId,
-        pageNumber,
-        limitNumber,
-        canViewPostWithOriginal,
-      });
-
-    return sendSuccess(res, {
-      data: result.posts,
-      pagination: result.pagination,
-    });
-  }
-);
 
 // ─────────────────────────────────────────
-// SAVE
+// GET SAVED POSTS
 // ─────────────────────────────────────────
-export const savePost = asyncHandler(async (req, res) => {
+
+
+export const getSavedPosts = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const { postId } = req.params;
+  const { page, limit } = req.validated.query;
+
+  const result = await getSavedPostsService({
+    userId,
+    pageNumber: page,
+    limitNumber: limit,
+    canViewPostWithOriginal,
+  });
+
+  return sendSuccess(res, {
+    data: result.posts,
+    pagination: result.pagination,
+  });
+});
+
+
+// ─────────────────────────────────────────
+// SAVE POST
+// ─────────────────────────────────────────
+
+export const savePost = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
 
   const result = await savePostService({
     postId,
-    userId,
+    userId: req.user._id,
     canViewPostWithOriginal,
   });
 
@@ -535,17 +477,16 @@ export const savePost = asyncHandler(async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// UNSAVE
+// UNSAVE POST
 // ─────────────────────────────────────────
+
 export const unsavePost = asyncHandler(async (req, res) => {
-  const userId = req.user._id;
-  const { postId } = req.params;
+  const { postId } = req.validated.params;
 
   const result = await unsavePostService({
     postId,
-    userId,
+    userId: req.user._id,
   });
-
 
   return sendSuccess(res, {
     data: {
@@ -554,17 +495,17 @@ export const unsavePost = asyncHandler(async (req, res) => {
   });
 });
 
+// ─────────────────────────────────────────
+// HIDE POST
+// ─────────────────────────────────────────
 
-// ─────────────────────────────────────────
-// HIDE
-// ─────────────────────────────────────────
 export const hidePost = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
+
   const result = await hidePostService({
-    postId: req.params.postId,
+    postId,
     userId: req.user._id,
   });
-
-
 
   return sendSuccess(res, {
     data: {
@@ -574,11 +515,14 @@ export const hidePost = asyncHandler(async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// UNHIDE
+// UNHIDE POST
 // ─────────────────────────────────────────
+
 export const unhidePost = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
+
   const result = await unhidePostService({
-    postId: req.params.postId,
+    postId,
     userId: req.user._id,
   });
 
@@ -590,17 +534,19 @@ export const unhidePost = asyncHandler(async (req, res) => {
 });
 
 // ─────────────────────────────────────────
-// REPORT
+// REPORT POST
 // ─────────────────────────────────────────
+
 export const reportPost = asyncHandler(async (req, res) => {
-  const { reason } = req.body;
+  const { postId } = req.validated.params;
+  const { reason } = req.validated.body;
 
   const result = await reportPostService({
-    postId: req.params.postId,
-    userId: req.user._id,
-    reason,
-  });
-
+  postId,
+  userId: req.user._id,
+  reason,
+  canViewPostWithOriginal,
+});
 
   return sendSuccess(res, {
     statusCode: 201,
@@ -611,9 +557,12 @@ export const reportPost = asyncHandler(async (req, res) => {
 // ─────────────────────────────────────────
 // SHARE TRACKING
 // ─────────────────────────────────────────
+
 export const trackShare = asyncHandler(async (req, res) => {
+  const { postId } = req.validated.params;
+
   const result = await trackShareService({
-    postId: req.params.postId,
+    postId,
     userId: req.user._id,
     canViewPostWithOriginal,
   });

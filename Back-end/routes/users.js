@@ -11,7 +11,21 @@ import Post from "../models/Post.js";
 import Comment from "../models/Comments.js";
 import { validate } from "../middleware/validate.js";
 import { setUserGoalSchema } from "../validators/goalValidators.js";
-import { updateProfileSchema, updatePrivacySchema, updateActiveStatusSchema, updateNotificationPreferencesSchema } from "../validators/userValidators.js";
+import {
+  updateProfileSchema,
+  updatePrivacySchema,
+  updateActiveStatusSchema,
+  updateNotificationPreferencesSchema,
+  userIdParamSchema,
+  userHandleParamSchema,
+  updateWorkoutSplitSchema,
+} from "../validators/userValidators.js";
+
+import { createNotificationService } from "../services/notificationService.js";
+import {
+  toggleFollowService,
+  followUserService,
+} from "../services/followService.js";
 
 import {
   getUserProfileById,
@@ -21,7 +35,10 @@ import {
   deleteAccount,
 } from "../controllers/userController.js";
 import { setUserGoal } from "../controllers/goalController.js";
-import { sendSuccess } from "../utils/apiResponse.js";
+import {
+  sendSuccess,
+  sendError,
+} from "../utils/apiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
   BadRequestError,
@@ -167,7 +184,6 @@ router.patch(
 router.get(
   "/notification-preferences",
   auth,
-  validate(updateNotificationPreferencesSchema),
   asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id).select(
       "notificationPreferences"
@@ -193,6 +209,7 @@ router.get(
 router.patch(
   "/notification-preferences",
   auth,
+  validate(updateNotificationPreferencesSchema),
   asyncHandler(async (req, res) => {
     const user = await User.findById(req.user._id);
 
@@ -282,88 +299,39 @@ router.delete("/account", auth, deleteAccount);
 // ID-BASED ROUTES (namespaced under /id, so no collision with /:handle)
 // ═══════════════════════════════════════════════════════
 
-router.get("/id/:id", auth, getUserProfileById);
-router.get("/id/:id/posts", auth, getUserPostsById);
+router.get(
+  "/id/:id",
+  auth,
+  validate(userIdParamSchema),
+  getUserProfileById);
+
+router.get(
+  "/id/:id/posts",
+  auth,
+  validate(userIdParamSchema),
+  getUserPostsById
+);
 
 router.post(
   "/id/:id/follow",
   auth,
+  validate(userIdParamSchema),
   asyncHandler(async (req, res) => {
     const targetId = req.params.id;
     const currentUserId = req.user.id || req.user._id;
 
-    if (targetId === currentUserId.toString()) {
-      throw new BadRequestError("Can't follow yourself");
-    }
-
     const targetUser = await User.findById(targetId);
-    const currentUser = await User.findById(currentUserId);
 
-    if (!targetUser || !currentUser) {
-      throw new NotFoundError("User not found");
-    }
-
-    const isFollowing = targetUser.followers.some(
-      (id) => id.toString() === currentUserId.toString()
-    );
-
-    // Atomic $addToSet/$pull — see the matching note in POST /:handle/follow
-    // for why this replaces the old read-then-push-then-save pattern.
-    if (isFollowing) {
-      await Promise.all([
-        User.updateOne(
-          { _id: targetId },
-          { $pull: { followers: currentUserId } }
-        ),
-        User.updateOne(
-          { _id: currentUserId },
-          { $pull: { following: targetId } }
-        ),
-      ]);
-    } else {
-      await Promise.all([
-        User.updateOne(
-          { _id: targetId },
-          { $addToSet: { followers: currentUserId } }
-        ),
-        User.updateOne(
-          { _id: currentUserId },
-          { $addToSet: { following: targetId } }
-        ),
-      ]);
-
-      if (targetUser.notificationPreferences?.follow !== false) {
-        // Reuse an existing unread follow notification instead of stacking
-        // up duplicates on unfollow/re-follow cycles.
-        const existing = await Notification.findOne({
-          recipient: targetId,
-          sender: currentUserId,
-          type: "follow",
-          read: false,
-        });
-
-        if (existing) {
-          existing.createdAt = new Date();
-          await existing.save();
-        } else {
-          await Notification.create({
-            recipient: targetId,
-            sender: currentUserId,
-            type: "follow",
-          });
-        }
-      }
-    }
-
-    const refreshedTarget = await User.findById(targetId).select(
-      "followers following"
-    );
+    const result = await toggleFollowService({
+      targetUser,
+      currentUserId,
+    });
 
     return sendSuccess(res, {
       data: {
-        following: !isFollowing,
-        followersCount: refreshedTarget.followers.length,
-        followingCount: refreshedTarget.following.length,
+        following: result.following,
+        followersCount: result.followersCount,
+        followingCount: result.followingCount,
       },
     });
   })
@@ -372,6 +340,7 @@ router.post(
 router.get(
   "/id/:id/follow-status",
   auth,
+  validate(userIdParamSchema),
   asyncHandler(async (req, res) => {
     const targetUser = await User.findById(req.params.id);
 
@@ -399,6 +368,7 @@ router.get(
 router.get(
   "/id/:id/followers",
   auth,
+  validate(userIdParamSchema),
   asyncHandler(async (req, res) => {
     const currentUserId = (req.user.id || req.user._id).toString();
 
@@ -433,6 +403,7 @@ router.get(
 router.get(
   "/id/:id/following",
   auth,
+  validate(userIdParamSchema),
   asyncHandler(async (req, res) => {
     const currentUserId = (req.user.id || req.user._id).toString();
 
@@ -472,6 +443,7 @@ router.get(
 router.get(
   "/:id/split",
   auth,
+  validate(userIdParamSchema),
   asyncHandler(async (req, res) => {
     if (req.user._id.toString() !== req.params.id) {
       throw new ForbiddenError("Unauthorized");
@@ -494,6 +466,8 @@ router.get(
 router.patch(
   "/:id/split",
   auth,
+  validate(userIdParamSchema),
+  validate(updateWorkoutSplitSchema),
   asyncHandler(async (req, res) => {
     if (req.user._id.toString() !== req.params.id) {
       throw new ForbiddenError("Unauthorized");
@@ -501,17 +475,6 @@ router.patch(
 
     const { split } = req.body;
 
-    if (!Array.isArray(split) || split.length !== 7) {
-      throw new BadRequestError(
-        "Split must be an array of exactly 7 day labels"
-      );
-    }
-
-    if (!split.every((day) => typeof day === "string" && day.length <= 20)) {
-      throw new BadRequestError(
-        "Each day must be a string (max 20 chars)"
-      );
-    }
 
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -536,6 +499,7 @@ router.patch(
 router.get(
   "/:handle",
   auth,
+  validate(userHandleParamSchema),
   asyncHandler(async (req, res) => {
     const user = await User.findOne({
       handle: req.params.handle.toLowerCase(),
@@ -588,133 +552,71 @@ router.get(
 router.post(
   "/:handle/follow",
   auth,
+  validate(userHandleParamSchema),
   asyncHandler(async (req, res) => {
     const search = req.params.handle.toLowerCase();
+    const currentUserId = req.user.id || req.user._id;
 
-    let target = await User.findOne({ handle: search });
+    let targetUser = await User.findOne({
+      handle: search,
+    });
 
-    if (!target && mongoose.Types.ObjectId.isValid(search)) {
-      target = await User.findById(search);
+    // Preserve existing ObjectId fallback.
+    if (
+      !targetUser &&
+      mongoose.Types.ObjectId.isValid(search)
+    ) {
+      targetUser = await User.findById(search);
     }
 
-    if (!target) {
-      throw new NotFoundError("User not found");
-    }
-
-    if (target._id.equals(req.user._id)) {
-      throw new BadRequestError("You cannot follow yourself");
-    }
-
-    const currentUserId = req.user._id;
-
-    const wasFollowing = target.followers.some((id) =>
-      id.equals(currentUserId)
-    );
-
-    if (wasFollowing) {
-      await Promise.all([
-        User.updateOne(
-          { _id: target._id },
-          { $pull: { followers: currentUserId } }
-        ),
-        User.updateOne(
-          { _id: currentUserId },
-          { $pull: { following: target._id } }
-        ),
-      ]);
-    } else {
-      await Promise.all([
-        User.updateOne(
-          { _id: target._id },
-          { $addToSet: { followers: currentUserId } }
-        ),
-        User.updateOne(
-          { _id: currentUserId },
-          { $addToSet: { following: target._id } }
-        ),
-      ]);
-
-      if (target.notificationPreferences?.follow !== false) {
-        const existing = await Notification.findOne({
-          recipient: target._id,
-          sender: currentUserId,
-          type: "follow",
-          read: false,
-        });
-
-        if (existing) {
-          existing.createdAt = new Date();
-          await existing.save();
-        } else {
-          await Notification.create({
-            recipient: target._id,
-            sender: currentUserId,
-            type: "follow",
-          });
-        }
-      }
-    }
-
-    const followerCount = await User.findById(target._id)
-      .select("followers")
-      .then((u) => u.followers.length);
+    const result = await toggleFollowService({
+      targetUser,
+      currentUserId,
+    });
 
     return sendSuccess(res, {
       data: {
-        following: !wasFollowing,
-        followerCount,
+        following: result.following,
+        followerCount: result.followersCount,
       },
     });
   })
 );
 
 // POST /api/users/:handle/follow-only — Force follow
+
 router.post(
   "/:handle/follow-only",
   auth,
+  validate(userHandleParamSchema),
   asyncHandler(async (req, res) => {
-    const target = await User.findOne({
-      handle: req.params.handle.toLowerCase(),
+    const search = req.params.handle.toLowerCase();
+    const currentUserId = req.user.id || req.user._id;
+
+    const targetUser = await User.findOne({
+      handle: search,
     });
 
-    if (!target) {
-      throw new NotFoundError("User not found");
-    }
-
-    if (target._id.equals(req.user._id)) {
-      throw new BadRequestError("You cannot follow yourself");
-    }
-
-    const alreadyFollowing = target.followers.includes(req.user._id);
-
-    if (!alreadyFollowing) {
-      target.followers.push(req.user._id);
-      req.user.following.push(target._id);
-
-      if (target.notificationPreferences?.follow !== false) {
-        await Notification.create({
-          recipient: target._id,
-          sender: req.user._id,
-          type: "follow",
-        });
-      }
-
-      await Promise.all([target.save(), req.user.save()]);
-    }
+    const result = await followUserService({
+      targetUser,
+      currentUserId,
+    });
 
     return sendSuccess(res, {
       data: {
-        following: true,
-        followerCount: target.followers.length,
+        following: result.following,
+        followerCount: result.followerCount,
       },
     });
   })
 );
 
+
 // POST /api/users/:handle/unfollow — Force unfollow
 router.post(
   "/:handle/unfollow",
   auth,
+  validate(userHandleParamSchema),
   asyncHandler(async (req, res) => {
     const target = await User.findOne({
       handle: req.params.handle.toLowerCase(),

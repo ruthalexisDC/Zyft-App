@@ -72,20 +72,52 @@ const WorkoutSplitModal = ({ isOpen, onClose, userId, onSave }) => {
   };
 
   const handleSave = async () => {
+    if (!userId) {
+      setError("User ID is missing. Please log in again.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSaved(false);
 
+    // Always send exactly seven valid day values.
+    const normalizedSplit = Array.from({ length: 7 }, (_, index) => {
+      const value = split[index];
+      return typeof value === "string" && value.trim() ? value.trim() : "Rest";
+    });
+
     try {
-      const res = await api.patchForm(`/users/${userId}/split`, { split });
+      // Send JSON, not multipart/form-data.
+      const res = await api.patch(`/users/${userId}/split`, {
+        split: normalizedSplit,
+      });
+
+      const responseData = res.data?.data ?? res.data;
+      const savedSplit = responseData?.split ?? normalizedSplit;
+
+      if (!Array.isArray(savedSplit)) {
+        throw new Error("Server returned an invalid workout split.");
+      }
+
+      setSplit(savedSplit);
       setSaved(true);
-      onSave?.(res.data);
+
+      onSave?.({
+        ...responseData,
+        split: savedSplit,
+      });
+
       setTimeout(() => {
         onClose();
         setSaved(false);
       }, 800);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to save split");
+      console.error("Failed to save workout split:", err.response?.data || err);
+
+      setError(
+        err.response?.data?.message || err.message || "Failed to save split",
+      );
     } finally {
       setLoading(false);
     }

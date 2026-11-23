@@ -26,4 +26,15 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // The Express API runs on Node: give it Node globals (`process`, etc.)
+    // instead of browser globals, otherwise every process.env use is flagged.
+    files: ['Back-end/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])

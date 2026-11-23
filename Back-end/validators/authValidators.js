@@ -56,3 +56,57 @@ export const exchangeSchema = z.object({
 
   query: z.object({}),
 });
+
+export const forgotPasswordSchema = z.object({
+  body: z.object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Please provide a valid email address"),
+  }),
+
+  params: z.object({}),
+
+  query: z.object({}),
+});
+
+export const resetPasswordSchema = z.object({
+  body: z.object({
+    token: z
+      .string()
+      .trim()
+      .min(1, "Reset token is required"),
+
+    newPassword: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(128, "Password cannot exceed 128 characters"),
+  }),
+
+  params: z.object({}),
+
+  query: z.object({}),
+});
+
+// POST /auth/verify-email (SEND the verification email) carries no payload —
+// the user is identified by the access token. It previously reused
+// verifyEmailSchema, which demands body.token, so every request got a 400.
+export const sendVerifyEmailSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({}),
+  query: z.object({}),
+});
+
+export const verifyEmailSchema = z.object({
+  body: z.object({
+    token: z
+      .string()
+      .trim()
+      .min(1, "Verification token is required"),
+  }),
+
+  params: z.object({}),
+
+  query: z.object({}),
+});

@@ -24,6 +24,7 @@ import WorkoutDetailPage from "./pages/WorkoutDetailPage.jsx";
 import VerifyEmail from "./pages/VerifyEmail.jsx";
 import VerifyEmailConfirm from "./pages/verifyEmailConfirm.jsx";
 import OAuthCallback from "./pages/OAuthCallback";
+import { Toaster } from "react-hot-toast";
 
 function App() {
   const { user } = useAuth();
@@ -32,6 +33,24 @@ function App() {
     <ThemeProvider>
       <BrowserRouter>
         <SocketProvider>
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              duration: 3000,
+              style: {
+                background: "#1a1a1a",
+                color: "#ffffff",
+                border: "1px solid #8b5cf6",
+                borderRadius: "12px",
+              },
+              success: {
+                iconTheme: {
+                  primary: "#00C9A7",
+                  secondary: "#ffffff",
+                },
+              },
+            }}
+          />
           <Routes>
             {/* Public routes (no bottom nav) */}
             <Route path="/" element={<Landing />} />

@@ -163,31 +163,262 @@ const mediaSchema = z.object({
  * POST /api/posts
  */
 export const PostWorkoutSchema = z.object({
+  body: z
+    .object({
+      content: z
+        .string()
+        .trim()
+        .max(
+          500,
+          "Post cannot exceed 500 characters"
+        )
+        .optional(),
+
+      visibility: z
+        .enum(["private", "followers", "public"], {
+          message:
+            "Visibility must be either 'private', 'followers', or 'public'",
+        })
+        .default("public"),
+
+      workout: workoutSchema.optional(),
+
+      media: z
+        .array(mediaSchema)
+        .default([]),
+    })
+    .refine(
+      ({ content, workout, media }) =>
+        Boolean(content) ||
+        Boolean(workout) ||
+        media.length > 0,
+      {
+        message:
+          "Post must contain content, workout, or media",
+      }
+    ),
+
+  params: z.object({}),
+  query: z.object({}),
+});
+
+// ─────────────────────────────────────────
+// PARAMETER SCHEMAS
+// ─────────────────────────────────────────
+
+export const postIdParamSchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    postId: objectIdSchema,
+  }),
+  query: z.object({}),
+});
+
+export const commentParamsSchema = z.object({
+  body: z.object({}),
+  params: z.object({
+    postId: objectIdSchema,
+    commentId: objectIdSchema,
+  }),
+  query: z.object({}),
+});
+
+
+// ─────────────────────────────────────────
+// COMMENT SCHEMAS
+// ─────────────────────────────────────────
+export const createCommentSchema = z.object({
   body: z.object({
     content: z
       .string()
       .trim()
-      .min(1, "Post content is required")
-      .max(500, "Post cannot exceed 500 characters"),
+      .min(1, "Comment content is required")
+      .max(500, "Comment cannot exceed 500 characters"),
 
-    visibility: z
-      .enum(
-        ["private", "followers", "public"],
-        {
-          message:
-            "Visibility must be either 'private', 'followers', or 'public'",
-        }
-      )
-      .default("public"),
-
-    workout: workoutSchema.optional(),
-
-    media: z
-      .array(mediaSchema)
-      .default([]),
+    parentComment: objectIdSchema
+      .nullable()
+      .optional(),
   }),
+
+  params: z.object({
+    postId: objectIdSchema,
+  }),
+
+  query: z.object({}),
+});
+
+
+
+export const updateCommentSchema = z.object({
+  body: z.object({
+    content: z
+      .string()
+      .trim()
+      .min(1, "Comment content is required")
+      .max(500, "Comment cannot exceed 500 characters"),
+  }),
+
+  params: z.object({
+    postId: objectIdSchema,
+    commentId: objectIdSchema,
+  }),
+
+  query: z.object({}),
+});
+
+
+export const reactToCommentSchema = z.object({
+  body: z.object({
+    emoji: z.enum(["👍", "❤️", "😂", "😮"], {
+      message: "Invalid reaction emoji",
+    }),
+  }),
+
+  params: z.object({
+    postId: objectIdSchema,
+    commentId: objectIdSchema,
+  }),
+
+  query: z.object({}),
+});
+
+
+// ─────────────────────────────────────────
+// POST UPDATE
+// ─────────────────────────────────────────
+
+export const updatePostSchema = z.object({
+  body: z
+    .object({
+      content: z
+        .string()
+        .trim()
+        .max(500, "Post cannot exceed 500 characters")
+        .optional(),
+
+      visibility: z
+        .enum(["private", "followers", "public"])
+        .optional(),
+
+      media: z.array(mediaSchema).optional(),
+    })
+    .refine(
+      (data) => Object.keys(data).length > 0,
+      {
+        message: "At least one field must be provided to update the post",
+      }
+    ),
+
+  params: z.object({
+    postId: objectIdSchema,
+  }),
+
+  query: z.object({}),
+});
+
+
+// ─────────────────────────────────────────
+// REPORT
+// ─────────────────────────────────────────
+
+export const reportPostSchema = z.object({
+  params: z.object({
+    postId: objectIdSchema,
+  }),
+  body: z.object({
+    reason: z.enum([
+      "spam",
+      "harassment",
+      "inappropriate",
+      "falseInfo",
+      "other",
+    ]),
+  }),
+});
+
+// ─────────────────────────────────────────
+// FEED QUERY
+// ─────────────────────────────────────────
+
+export const feedQuerySchema = z.object({
+  body: z
+  .object({})
+  .optional()
+  .default({}),
 
   params: z.object({}),
 
-  query: z.object({}),
+  query: z.object({
+    page: z.coerce
+      .number()
+      .int("Page must be a whole number")
+      .min(1, "Page must be at least 1")
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int("Limit must be a whole number")
+      .min(1, "Limit must be at least 1")
+      .max(50, "Limit cannot exceed 50")
+      .default(10),
+
+    type: z
+      .enum(["community", "following"], {
+        message: "Feed type must be either 'community' or 'following'",
+      })
+      .default("community"),
+  }),
+});
+
+
+// ─────────────────────────────────────────
+// SAVED POSTS QUERY
+// ─────────────────────────────────────────
+
+export const savedPostsQuerySchema = z.object({
+  body: z.object({}),
+
+  params: z.object({}),
+
+  query: z.object({
+    page: z.coerce
+      .number()
+      .int("Page must be a whole number")
+      .min(1, "Page must be at least 1")
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int("Limit must be a whole number")
+      .min(1, "Limit must be at least 1")
+      .max(50, "Limit cannot exceed 50")
+      .default(20),
+  }),
+});
+
+// ─────────────────────────────────────────
+// USER POSTS QUERY
+// ─────────────────────────────────────────
+
+export const userPostsSchema = z.object({
+  body: z.object({}),
+
+  params: z.object({
+    userId: objectIdSchema,
+  }),
+
+  query: z.object({
+    page: z.coerce
+      .number()
+      .int("Page must be a whole number")
+      .min(1, "Page must be at least 1")
+      .default(1),
+
+    limit: z.coerce
+      .number()
+      .int("Limit must be a whole number")
+      .min(1, "Limit must be at least 1")
+      .max(50, "Limit cannot exceed 50")
+      .default(10),
+  }),
 });

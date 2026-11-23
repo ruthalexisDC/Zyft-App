@@ -12,7 +12,15 @@ import {
   CalendarDays,
   Users,
 } from "lucide-react";
-import { getPosts, updatePost, deletePost, respectPost } from "../api/posts";
+
+import {
+  getPosts,
+  updatePost,
+  deletePost,
+  respectPost,
+  toggleRepost,
+} from "../api/posts";
+
 import { getUserStats, updateUserGoal } from "../api/stats";
 import api from "../api/axios";
 //import { getUserProfile, getUserSplit } from "../api/users";
@@ -146,7 +154,7 @@ export default function Home() {
   const [fullUser, setFullUser] = useState(null);
 
   // ── WorkoutCard state & helpers ──
-  const [todayWorkout, setTodayWorkout] = useState({
+  const [todayWorkout] = useState({
     completed: false,
     completedAt: null,
     duration: null,
@@ -289,18 +297,40 @@ export default function Home() {
     }
   }, [user?._id]);
 
+  const userId = user?._id;
+
   const fetchUserSplit = useCallback(async () => {
-    if (!user?._id) return;
+    if (!userId) {
+      setUserSplit(Array(7).fill("Rest"));
+      setSplitLoading(false);
+      return;
+    }
+
     setSplitLoading(true);
+
     try {
-      const { data } = await api.get(`/users/${user._id}/split`);
-      if (data.split) setUserSplit(data.split);
+      const response = await api.get(`/users/${userId}/split`);
+
+      console.log("User split API response:", response.data);
+
+      const split = response.data?.data?.split ?? response.data?.split;
+
+      setUserSplit(
+        Array.isArray(split)
+          ? Array.from({ length: 7 }, (_, index) => split[index] || "Rest")
+          : Array(7).fill("Rest"),
+      );
     } catch (err) {
-      console.log("No split found, using default");
+      console.error(
+        "Failed to fetch user split:",
+        err.response?.data || err.message,
+      );
+
+      setUserSplit(Array(7).fill("Rest"));
     } finally {
       setSplitLoading(false);
     }
-  }, [user?._id]);
+  }, [userId]);
 
   // Fetch posts for whichever feed tab is active
   const fetchPosts = useCallback(async (type, signalCancelled) => {
@@ -440,31 +470,89 @@ export default function Home() {
     }
   };
 
-  const handleRespect = async (postId, currentRespected, currentCount) => {
-    setPosts((prev) =>
-      prev.map((p) =>
-        p._id === postId
-          ? {
-              ...p,
-              didRespect: !currentRespected,
-              respectCount: currentRespected
-                ? currentCount - 1
-                : currentCount + 1,
-            }
-          : p,
-      ),
-    );
+  const handleRespect = async (postId) => {
     try {
-      await respectPost(postId, !currentRespected);
-    } catch {
+      const res = await respectPost(postId);
+
+      const responseData = res.data?.data ?? res.data;
+
+      const respected = responseData?.respected ?? responseData?.didRespect;
+
+      const respectCount = responseData?.respectCount;
+
+      if (typeof respected !== "boolean" || typeof respectCount !== "number") {
+        console.error("Unexpected respect API response:", res.data);
+        throw new Error("Unexpected respect response.");
+      }
+
       setPosts((prev) =>
-        prev.map((p) =>
-          p._id === postId
-            ? { ...p, didRespect: currentRespected, respectCount: currentCount }
-            : p,
-        ),
+        prev.map((post) => {
+          // Normal post
+          if (post._id?.toString() === postId.toString()) {
+            return {
+              ...post,
+              didRespect: respected,
+              respectCount,
+            };
+          }
+
+          // Repost containing the original post
+          if (post.originalPost?._id?.toString() === postId.toString()) {
+            return {
+              ...post,
+              didRespect: respected,
+              respectCount,
+              originalPost: {
+                ...post.originalPost,
+                didRespect: respected,
+                respectCount,
+              },
+            };
+          }
+
+          return post;
+        }),
       );
+    } catch (err) {
+      console.error("Respect failed:", err);
+
+      // showToast(
+      //   err.response?.data?.message || "Failed to update respect.",
+      //   "error",
+      // );
+      console.error(err.response?.data?.message || "Failed to update respect.");
+      throw err;
     }
+  };
+
+  const handleRepost = async (postId) => {
+    const response = await toggleRepost(postId);
+
+    console.log("REPOST RESPONSE:", response.data);
+
+    const reposted = response.data?.data?.reposted;
+
+    if (typeof reposted !== "boolean") {
+      throw new Error("Unexpected repost response");
+    }
+
+    const feedResponse = await getPosts({
+      type: feedType,
+      limit: 50,
+    });
+
+    const updatedPosts = feedResponse.data?.data?.posts ?? [];
+
+    console.log("ALL POSTS:", updatedPosts);
+
+    console.log(
+      "REPOSTED POSTS:",
+      updatedPosts.filter((post) => post.isRepost === true),
+    );
+
+    setPosts(updatedPosts);
+
+    return reposted;
   };
 
   const handleSetGoal = async () => {
@@ -917,6 +1005,7 @@ export default function Home() {
               onUpdate={handleUpdatePost}
               onDelete={handleDeletePost}
               onRespect={handleRespect}
+              onRepost={handleRepost}
             />
           ))}
         </div>

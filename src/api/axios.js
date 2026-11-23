@@ -10,22 +10,26 @@ const api = axios.create({
 });
 
 // ── Attach access token ────────────────────────────────────────────────
+// Endpoints that never need (or can't use) an access token. A 401 from one of
+// these is a real answer ("wrong password", "bad code"), NOT an expired
+// session, so it must never trigger the refresh-and-redirect flow below.
+const PUBLIC_ENDPOINTS = [
+  "/auth/login",
+  "/auth/register/email",
+  "/auth/forgot-password",
+  "/auth/verify-email/confirm",
+  "/auth/reset-password",
+  "/auth/exchange",
+  "/auth/refresh",
+];
+
+const isPublicUrl = (url) =>
+  PUBLIC_ENDPOINTS.some((endpoint) => url?.includes(endpoint));
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
 
-  const publicEndpoints = [
-    "/auth/login",
-    "/auth/register/email",
-    "/auth/forgot-password",
-    "/auth/verify-email/confirm",
-    "/auth/reset-password",
-    "/auth/exchange",
-    "/auth/refresh",
-  ];
-
-  const isPublic = publicEndpoints.some((endpoint) =>
-    config.url?.includes(endpoint)
-  );
+  const isPublic = isPublicUrl(config.url);
 
   if (token && !isPublic) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -55,17 +59,25 @@ api.interceptors.response.use(
     // Don't refresh for:
     // - non-401 errors
     // - requests that were already retried
-    // - the refresh endpoint itself
+    // - public auth endpoints (login, register, refresh, ...). Previously only
+    //   /auth/refresh was excluded, so a wrong-password 401 from /auth/login
+    //   fired a pointless refresh, replaced the real error message with
+    //   "Refresh token is required", and hard-reloaded the page.
     if (
-      error.response?.status !== 401 ||
+      !error.response ||
+      error.response.status !== 401 ||
+      !originalRequest ||
       originalRequest._retry ||
-      originalRequest.url?.includes("/auth/refresh")
+      isPublicUrl(originalRequest.url)
     ) {
       return Promise.reject(error);
     }
 
     // ── Wait if another request is already refreshing ────────────────
     if (isRefreshing) {
+      // Mark as retried so a second 401 can't start yet another refresh cycle.
+      originalRequest._retry = true;
+
       return new Promise((resolve, reject) => {
         queue.push({ resolve, reject });
       }).then((token) => {
@@ -111,8 +123,11 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
 
-      // Send user back to login.
-      window.location.href = "/login";
+      // Send user back to login (skip if already there — assigning the same
+      // URL would just reload the page and wipe the form/error state).
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
 
       return Promise.reject(refreshErr);
     } finally {

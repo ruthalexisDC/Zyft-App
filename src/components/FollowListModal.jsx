@@ -26,9 +26,15 @@ export default function FollowListModal({ open, type, userId, onClose }) {
 
     api
       .get(`/users/id/${userId}/${type}`)
+
       .then((res) => {
-        if (!cancelled) setUsers(res.data.users || []);
+        if (!cancelled) {
+          const list = res.data?.data?.users ?? res.data?.users;
+
+          setUsers(Array.isArray(list) ? list : []);
+        }
       })
+
       .catch(() => {
         if (!cancelled) setError("Couldn't load this list. Try again.");
       })

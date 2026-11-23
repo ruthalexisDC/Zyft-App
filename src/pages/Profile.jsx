@@ -2,10 +2,11 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useTranslation } from "react-i18next";
+import FeedPostCard from "../components/FeedPostCard.jsx";
 import WorkoutPostCard from "../components/WorkoutPostCard.jsx";
 import { useSocket } from "../context/SocketContext.jsx";
 import api from "../api/axios";
-import { getSavedPosts } from "../api/posts";
+import { getSavedPosts, toggleRepost } from "../api/posts";
 import {
   Dumbbell,
   TrendingUp,
@@ -15,6 +16,7 @@ import {
   Zap,
   Loader2,
   Bookmark,
+  Repeat2,
 } from "lucide-react";
 import FollowListModal from "../components/FollowListModal.jsx";
 
@@ -209,6 +211,7 @@ export default function Profile() {
 
   const [posts, setPosts] = useState([]);
   const [savedPosts, setSavedPosts] = useState([]);
+  const [reposts, setReposts] = useState([]);
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -268,13 +271,20 @@ export default function Profile() {
 
     setFollowLoading(true);
     try {
-      const { data } = await api.post(`/users/id/${targetUserId}/follow`, {});
+      const { data: response } = await api.post(
+        `/users/id/${targetUserId}/follow`,
+        {},
+      );
+
+      const data = response.data;
 
       setIsFollowing(data.following);
 
       setProfileData((prev) => ({
         ...prev,
-        followersCount: data.followersCount ?? prev?.followersCount,
+        isFollowing: data.following,
+        followersCount:
+          data.followersCount ?? data.followerCount ?? prev?.followersCount,
       }));
 
       showToast(
@@ -300,12 +310,22 @@ export default function Profile() {
         setLoading(true);
 
         const userRes = await api.get(`/users/id/${targetUserId}`);
-        setProfileData(userRes.data.user);
+
+        const userData = userRes.data?.data?.user ?? userRes.data?.user;
+
+        setProfileData(userData);
 
         const postsRes = await api.get(
           `/users/id/${targetUserId}/posts?page=1&limit=20`,
         );
-        setPosts(postsRes.data.posts || []);
+
+        const postsData = postsRes.data?.data;
+
+        const profilePosts = Array.isArray(postsData) ? postsData : [];
+
+        setPosts(profilePosts.filter((post) => post.isRepost !== true));
+
+        setReposts(profilePosts.filter((post) => post.isRepost === true));
       } catch (err) {
         console.error("Profile fetch error:", err);
         setError(err.response?.data?.message || t("errors.loadFailed"));
@@ -418,19 +438,105 @@ export default function Profile() {
     try {
       const res = await api.post(`/posts/${postId}/respect`, {});
 
+      // Support both direct and wrapped API response formats.
+      const responseData = res.data?.data ?? res.data;
+
+      const respected = responseData?.respected ?? responseData?.didRespect;
+
+      const respectCount = responseData?.respectCount;
+
+      if (typeof respected !== "boolean" || typeof respectCount !== "number") {
+        console.error("Unexpected respect API response:", res.data);
+        throw new Error("Unexpected respect response.");
+      }
+
+      // Update a normal post.
       const updatePost = (post) =>
-        post._id === postId
+        post._id?.toString() === postId.toString()
           ? {
               ...post,
-              didRespect: res.data.respected,
-              respectCount: res.data.respectCount,
+              didRespect: respected,
+              respectCount,
             }
           : post;
 
       setPosts((prev) => prev.map(updatePost));
+
+      // Update a saved post.
       setSavedPosts((prev) => prev.map(updatePost));
+
+      // Update the original post inside each repost record.
+      setReposts((prev) =>
+        prev.map((repost) => {
+          if (repost.originalPost?._id?.toString() !== postId.toString()) {
+            return repost;
+          }
+
+          return {
+            ...repost,
+            originalPost: {
+              ...repost.originalPost,
+              didRespect: respected,
+              respectCount,
+            },
+          };
+        }),
+      );
     } catch (err) {
       console.error("Respect failed:", err);
+      showToast(
+        err.response?.data?.message || "Failed to update respect.",
+        "error",
+      );
+    }
+  };
+
+  // repost
+  const handleRepost = async (postId) => {
+    try {
+      const response = await toggleRepost(postId);
+      const reposted = response.data?.data?.reposted;
+
+      if (typeof reposted !== "boolean") {
+        throw new Error("Unexpected repost response.");
+      }
+
+      // Update the original post's repost state.
+      const updateOriginalPost = (post) =>
+        post._id === postId ? { ...post, isReposted: reposted } : post;
+
+      setPosts((prev) => prev.map(updateOriginalPost));
+      setSavedPosts((prev) => prev.map(updateOriginalPost));
+
+      setReposts((prev) => {
+        // If this is the current user's profile and they removed
+        // their repost, remove that repost entry from the tab.
+        const remaining =
+          !reposted && isOwnProfile
+            ? prev.filter((item) => item.originalPost?._id !== postId)
+            : prev;
+
+        return remaining.map((item) =>
+          item.originalPost?._id === postId
+            ? {
+                ...item,
+                originalPost: {
+                  ...item.originalPost,
+                  isReposted: reposted,
+                },
+              }
+            : item,
+        );
+      });
+
+      return reposted;
+    } catch (err) {
+      console.error("Repost failed:", err);
+      showToast(
+        err.response?.data?.message || "Failed to update repost.",
+        "error",
+      );
+      throw err;
     }
   };
 
@@ -490,6 +596,77 @@ export default function Profile() {
     streak: profileData?.streakCount ?? computedStreak,
     prs: profileData?.prsCount ?? computedPRs,
     weeksActive: computedWeeksActive,
+  };
+
+  // ─── Update post handler ───
+  const handleUpdatePost = async (postId, updates) => {
+    try {
+      const res = await api.patch(`/posts/${postId}`, updates);
+
+      // The update endpoint returns the updated post.
+      const responseData = res.data?.data;
+      const updatedPost =
+        responseData?.post || responseData?.data || responseData;
+
+      setPosts((prev) =>
+        prev.map((post) =>
+          post._id === postId
+            ? {
+                ...post,
+                ...(updatedPost?._id ? updatedPost : updates),
+              }
+            : post,
+        ),
+      );
+
+      setSavedPosts((prev) =>
+        prev.map((post) =>
+          post._id === postId
+            ? {
+                ...post,
+                ...(updatedPost?._id ? updatedPost : updates),
+              }
+            : post,
+        ),
+      );
+
+      showToast("Post updated successfully.", "success");
+    } catch (err) {
+      console.error("Post update failed:", err);
+      showToast(
+        err.response?.data?.message || "Failed to update post.",
+        "error",
+      );
+      throw err;
+    }
+  };
+  // ─── Delete post handler ───
+  const handleDeletePost = async (postId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this post?",
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/posts/${postId}`);
+
+      setPosts((prev) => prev.filter((post) => post._id !== postId));
+
+      setSavedPosts((prev) => prev.filter((post) => post._id !== postId));
+
+      setReposts((prev) =>
+        prev.filter((repost) => repost.originalPost?._id !== postId),
+      );
+
+      showToast("Post deleted successfully.", "success");
+    } catch (err) {
+      console.error("Post deletion failed:", err);
+      showToast(
+        err.response?.data?.message || "Failed to delete post.",
+        "error",
+      );
+    }
   };
 
   // ── CHANGED: Consistency percentage for the mini progress ring.
@@ -780,6 +957,11 @@ export default function Profile() {
             label: t("tabs.post"),
             icon: <Grid size={16} />,
           },
+          {
+            key: "Reposts",
+            label: "Reposts",
+            icon: <Repeat2 size={16} />,
+          },
           ...(isOwnProfile
             ? [
                 {
@@ -811,6 +993,51 @@ export default function Profile() {
           </button>
         ))}
       </div>
+
+      {/* ── Reposts Tab ── */}
+      {activeTab === "Reposts" && (
+        <div className="space-y-3">
+          {reposts.length === 0 ? (
+            <div className="bg-[#13131f] rounded-2xl p-8 border border-white/5 text-center">
+              <Repeat2 className="w-8 h-8 text-gray-600 mx-auto mb-3" />
+              <p className="text-sm text-gray-500">No reposts to display.</p>
+              <p className="text-xs text-gray-600 mt-1">
+                Reposts returned by this profile's posts endpoint appear here.
+              </p>
+            </div>
+          ) : (
+            reposts.map((post) => {
+              const originalPost =
+                post.originalPost && typeof post.originalPost === "object"
+                  ? post.originalPost
+                  : null;
+
+              if (!originalPost) return null;
+
+              return (
+                <div key={post._id} className="space-y-2">
+                  <div className="flex items-center gap-1.5 px-2 text-xs text-purple-300">
+                    <Repeat2 size={14} />
+                    <span>
+                      {isOwnProfile
+                        ? "You reposted"
+                        : `${displayUser.name} reposted`}
+                    </span>
+                  </div>
+                  <FeedPostCard
+                    post={originalPost}
+                    currentUserId={normalizedCurrentUserId}
+                    onUpdate={handleUpdatePost}
+                    onDelete={handleDeletePost}
+                    onRespect={handleRespect}
+                    onRepost={handleRepost}
+                  />
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* ── Saved Tab ── */}
       {activeTab === "Saved" && isOwnProfile && (
@@ -850,12 +1077,13 @@ export default function Profile() {
             </p>
           ) : (
             posts.map((post) => (
-              <WorkoutPostCard
+              <FeedPostCard
                 key={post._id}
                 post={post}
+                currentUserId={normalizedCurrentUserId}
+                onUpdate={handleUpdatePost}
+                onDelete={handleDeletePost}
                 onRespect={handleRespect}
-                getTimeAgo={getTimeAgo}
-                t={t}
               />
             ))
           )}

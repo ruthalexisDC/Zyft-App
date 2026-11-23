@@ -9,10 +9,10 @@ const postSchema = new mongoose.Schema(
     },
 
     content: {
-      type: String,
-      required: [true, 'Post content is required'],
-      maxlength: [500, 'Post cannot exceed 500 characters'],
-    },
+     type: String,
+     maxlength: [500, 'Post cannot exceed 500 characters'],
+    default: '',
+},
 
     tags: [{ type: String }],
 

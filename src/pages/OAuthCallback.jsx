@@ -72,11 +72,17 @@ export default function OAuthCallback() {
         }
 
         // Your /me endpoint returns data.user
-        const user = userResult?.data?.user;
+        const meUser = userResult?.data?.user;
 
-        if (!user) {
+        if (!meUser) {
           throw new Error("User data not received.");
         }
+
+        // /auth/me sends `id`, but ~40 places in the app read `user._id`
+        // (AuthContext.normalizeUser does this for email login and page
+        // reloads, but this path bypassed it — so after Google/Facebook
+        // sign-in `user._id` was undefined until the next full refresh).
+        const user = { ...meUser, _id: meUser._id || meUser.id };
 
         // Step 4: Save user
         localStorage.setItem("user", JSON.stringify(user));

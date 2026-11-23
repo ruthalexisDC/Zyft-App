@@ -21,6 +21,7 @@ import jwt from 'jsonwebtoken';
 import { Server as SocketIOServer } from 'socket.io';
 import helmet from 'helmet';
 import cookieParser from "cookie-parser";
+import { startReportCleanupJob } from "./services/reportCleanupService.js";
 
 // Routes
 import authRoutes          from './routes/authRoutes.js';
@@ -33,6 +34,10 @@ import notificationsRoutes from './routes/notificationsRoutes.js';
 // Models / socket handlers (for presence)
 import User from './models/User.js';
 import { resetPresenceOnBoot, registerPresenceHandlers, getOnlineUserIds } from './socket/presence.js';
+
+
+let reportCleanupTask = null;
+let isShuttingDown = false;
 
 // Debug
 console.log('JWT_SECRET:',         process.env.JWT_SECRET         ? '✓' : '✗ MISSING');
@@ -187,7 +192,7 @@ io.use(async (socket, next) => {
 });
 
 // Only call this ONCE — this is the single source of presence wiring.
-registerPresenceHandlers(io);
+const presenceLifecycle = registerPresenceHandlers(io);
 
 // Make io available to REST routes/controllers later if needed
 // (e.g. emitting a notification when someone comments on your post).
@@ -203,16 +208,169 @@ const PORT = process.env.PORT || 5000;
 // then immediately stomp those fresh, legitimate writes back to false.
 async function startServer() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB connected');
+ await mongoose.connect(process.env.MONGODB_URI);
+console.log('MongoDB connected');
 
-    await resetPresenceOnBoot();
+await resetPresenceOnBoot();
 
-    server.listen(PORT, () => console.log(` helmet is working! Server running on port ${PORT}`));
+// Start automatic expired report snapshot cleanup.
+reportCleanupTask = startReportCleanupJob();
+
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
   } catch (err) {
     console.error('Startup error:', err);
     process.exit(1);
   }
 }
+// async function shutdown(signal) {
+//   if (isShuttingDown) return;
+
+//   isShuttingDown = true;
+
+//   console.log(`[Shutdown] ${signal} received. Shutting down gracefully...`);
+
+//   // Stop future scheduled cleanup executions.
+//   reportCleanupTask?.stop();
+
+//   // Prevent the process from hanging indefinitely.
+//   const forceExitTimer = setTimeout(() => {
+//     console.error("[Shutdown] Forced exit after timeout.");
+//     process.exit(1);
+//   }, 10000);
+
+//  // forceExitTimer.unref();
+
+//   try {
+//     // Close Socket.IO and the underlying HTTP server.
+//     await new Promise((resolve) => {
+//       io.close(() => resolve());
+//     });
+
+//     // Disconnect MongoDB.
+//     await mongoose.disconnect();
+
+//     clearTimeout(forceExitTimer);
+
+//     console.log("[Shutdown] Server and MongoDB shut down successfully.");
+
+//     process.exit(0);
+//   } catch (error) {
+//     clearTimeout(forceExitTimer);
+
+//     console.error("[Shutdown] Error during shutdown:", error);
+
+//     process.exit(1);
+//   }
+// }
+
+// process.once("SIGINT", () => shutdown("SIGINT"));
+// process.once("SIGTERM", () => shutdown("SIGTERM"));
+
+
+async function shutdown(signal) {
+  if (isShuttingDown) return;
+
+  isShuttingDown = true;
+
+  console.log(`[Shutdown] ${signal} received. Shutting down gracefully...`);
+
+  // 1. Stop the report cleanup scheduler.
+  try {
+    console.log("[Shutdown] Stopping report cleanup scheduler...");
+
+    reportCleanupTask?.stop();
+
+    console.log("[Shutdown] Report cleanup scheduler stopped.");
+
+    // 2. Set a 10-second timeout.
+    // Keep this timer referenced during the diagnostic test.
+    const forceExitTimer = setTimeout(() => {
+      console.error("[Shutdown] Forced exit after timeout.");
+      process.exit(1);
+    }, 10000);
+
+   
+// 3. Diagnose and close Socket.IO.
+
+// Stop new presence activity and reconciliation.
+presenceLifecycle.beginShutdown();
+
+console.log("[Shutdown] Closing Socket.IO...");
+
+console.log(
+  "[Shutdown] Active Engine.IO clients:",
+  io.engine.clientsCount
+);
+
+console.log(
+  "[Shutdown] Active namespace sockets:",
+  io.of("/").sockets.size
+);
+
+// Monitor connected clients during shutdown.
+io.of("/").sockets.forEach((socket) => {
+  socket.once("disconnect", (reason) => {
+    console.log(
+      `[Shutdown] Socket ${socket.id} disconnected: ${reason}`
+    );
+  });
+});
+
+console.log(
+  "[Shutdown] HTTP server listening:",
+  server.listening
+);
+
+server.getConnections((error, count) => {
+  if (error) {
+    console.error("[Shutdown] HTTP connection check failed:", error);
+    return;
+  }
+
+  console.log(
+    "[Shutdown] Active HTTP connections:",
+    count
+  );
+});
+
+console.log("[Shutdown] Calling io.close()...");
+
+await new Promise((resolve) => {
+  io.close(() => {
+    console.log("[Shutdown] Socket.IO close callback executed.");
+    resolve();
+  });
+});
+
+console.log("[Shutdown] Socket.IO closed.");
+
+console.log("[Shutdown] Waiting for pending presence operations...");
+
+await presenceLifecycle.waitForPendingOperations();
+
+console.log("[Shutdown] Pending presence operations completed.");
+
+console.log("[Shutdown] Disconnecting MongoDB...");
+
+await mongoose.disconnect();
+
+    console.log("[Shutdown] MongoDB disconnected.");
+
+    clearTimeout(forceExitTimer);
+
+    // 5. Confirm successful shutdown.
+    console.log("[Shutdown] Server and MongoDB shut down successfully.");
+
+    process.exit(0);
+
+  } catch (error) {
+    console.error("[Shutdown] Error during shutdown:", error);
+    process.exit(1);
+  }
+}
+ process.once("SIGINT", () => shutdown("SIGINT"));
+ process.once("SIGTERM", () => shutdown("SIGTERM"));
 
 startServer();

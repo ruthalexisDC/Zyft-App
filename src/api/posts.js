@@ -35,8 +35,14 @@ export const getPost = (id) => api.get(`/posts/${id}`);
 export const createPost = (data) => api.post('/posts', data);
 export const updatePost = (id, data) => api.patch(`/posts/${id}`, data);
 export const deletePost = (id) => api.delete(`/posts/${id}`);
+
 export const respectPost = (postId, respected) =>
   api.post(`/posts/${postId}/respect`, { respected });
+
+export const toggleRepost = (postId) =>
+  api.post(`/posts/${postId}/repost`);
+
+
 export const getComments = (postId) => api.get(`/posts/${postId}/comments`);
 export const addComment = (postId, data) =>
   api.post(`/posts/${postId}/comments`, data);

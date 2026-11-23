@@ -1,6 +1,7 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { sendSuccess } from "../utils/apiResponse.js";
 import { BadRequestError } from "../errors/ApiError.js";
+import { clearRefreshTokenCookie } from "../utils/cookies.js";
 
 
 // Services
@@ -32,8 +33,24 @@ export const getUserProfileById = asyncHandler(async (req, res) => {
 export const getUserPostsById = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
+ const parsePositiveInteger = (value, fallback, max = Infinity) => {
+  if (value === undefined) return fallback;
+
+  if (typeof value !== "string" || !/^[1-9]\d*$/.test(value)) {
+    throw new BadRequestError("Invalid pagination parameter");
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isSafeInteger(parsed) || parsed > max) {
+    throw new BadRequestError("Invalid pagination parameter");
+  }
+
+  return parsed;
+};
+
+const page = parsePositiveInteger(req.query.page, 1);
+const limit = parsePositiveInteger(req.query.limit, 20, 50);
 
   const result = await getUserPostsByIdService(
     id,
@@ -83,6 +100,9 @@ export const uploadAvatar = asyncHandler(async (req, res) => {
 // Refactored:  Delete user account
 export const deleteAccount = asyncHandler(async (req, res) => {
   await deleteUserAccountService(req.user._id);
+
+  // Only clear the cookie after successful account deletion.
+  clearRefreshTokenCookie(res);
 
   return sendSuccess(res, {
     message: "Account deleted successfully",
